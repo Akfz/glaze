@@ -4,7 +4,7 @@
   "compatibilityLevel": "JAVA_17",
   "plugin": "n.paradox.aslib.mixin.plugin.AsLibMixinPlugin",
   "mixins": [
-    "TestMixin"
+    "template_mod.mixin.TestMixin"
   ],
   "injectors": {
     "defaultRequire": 1

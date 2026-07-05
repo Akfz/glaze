@@ -28,10 +28,6 @@ dependencies {
     annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
 }
 
-tasks.named('compileJava', JavaCompile) {
-    source += fileTree(dir: 'src/sharedCode/java', include: '**/*.java')
-}
-
 sourceSets {
     main {
         java {

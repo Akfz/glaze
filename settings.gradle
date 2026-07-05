@@ -17,7 +17,8 @@ plugins {
 
 rootProject.name = 'Template' //u can change
 
-//RECOMMEND : write all code (mixins too) in common and in fabric and forge only for init and compile (P.s neoforge supported, quilt in version 0 not)
+//RECOMMEND : write all code (mixins too) in common and in fabric and forge only for init and compile (P.s neoforge supported, quilt is not)
+include 'bridge' // DONT WRITE ANYTHING INSIDE
 include 'common'
 include 'fabric'
 include 'forge'

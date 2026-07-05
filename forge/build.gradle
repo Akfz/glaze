@@ -27,7 +27,6 @@ minecraft {
             mods {
                 "${project.mod_id}" {
                     source sourceSets.main
-                    source project(':common').sourceSets.main
                 }
             }
         }
@@ -46,7 +45,7 @@ minecraft {
 
         data {
             workingDirectory project.file('run-data')
-            args '--mod', "${project.mod_id}", '--all', '--output', file('src/generated/resources/'), '--existing', project(':common').file('src/main/resources/')
+            args '--mod', "${project.mod_id}", '--all', '--output', file('src/generated/resources/'), '--existing'
         }
     }
 }
@@ -57,8 +56,6 @@ dependencies {
 
     compileOnly "io.github.llamalad7:mixinextras-common:0.4.1"
     annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
-
-    implementation project(path: ":common", configuration: "namedElements")
 }
 
 mixin {
@@ -66,38 +63,40 @@ mixin {
     config "${project.mod_id}.mixins.json"
 }
 
+evaluationDependsOn(':bridge')
+
 sourceSets {
     main {
         java {
-            srcDirs = ['src/main/java']
-            srcDirs += project.project(':common').file("src/sharedCode/java")
-            srcDirs += project.project(':common').file("src/generated/java")
+            srcDirs = [
+                    'src/main/java',
+                    project(':bridge').file('build/bridge/java')
+            ]
         }
         resources {
-            srcDirs = ['src/main/resources']
-            srcDirs += project.project(':common').file("src/main/resources")
-            srcDirs += project.project(':common').file("src/generated/resources")
+            srcDirs = [
+                    'src/main/resources',
+                    project(':bridge').file('build/bridge/resources')
+            ]
         }
     }
 }
 
 tasks.named('compileJava', JavaCompile) {
-    dependsOn project(':common').tasks.named('compileJava')
-    classpath += project(':common').sourceSets.main.output
+    dependsOn project(':bridge').tasks.named('copyCommon')
 
     options.compilerArgs << "-AoutRefMapFile=${projectDir}/build/resources/main/${project.mod_id}.refmap.json"
     options.compilerArgs << "-AoutMapFileWithMappings=true"
 }
 
 tasks.named('processResources', ProcessResources) {
-    from project(':common').sourceSets.main.resources
+    dependsOn project(':bridge').tasks.named('copyCommon')
 }
 
 tasks.named('jar', Jar).configure {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     from sourceSets.main.output
-    from project(':common').sourceSets.main.output
 
     destinationDirectory.set(file("${project.layout.buildDirectory.get().asFile}/libs"))
     archiveFileName = "${project.archives_base_name}-${project.mod_version}-forge.jar"

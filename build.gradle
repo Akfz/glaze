@@ -33,6 +33,13 @@ subprojects {
         it.options.release = 17
     }
 
+    if (project.name != 'common') {
+        configurations {
+            embed
+            implementation.extendsFrom(embed)
+        }
+    }
+
     afterEvaluate {
         def finalJarName = "${rootProject.archives_base_name}-${project.name}-${project.version}.jar"
 
@@ -42,17 +49,9 @@ subprojects {
         }
 
         if (project.name != 'common') {
-            configurations {
-                embed
-                implementation.extendsFrom(embed)
-            }
-
-            // P.s if u want add and use aslib annotations(dontcompile, RegisterModule(auto registation) and more), uncomment this
-            /*
             dependencies {
                 annotationProcessor aslibJar
             }
-             */
 
             if (project.name == 'fabric') {
                 tasks.named('remapJar') { task ->
@@ -211,24 +210,35 @@ if (libsDir.exists() && libsDir.isDirectory()) {
 
 tasks.register('compileAll', Copy) {
     group = 'build'
-    description = 'Compile and copy from all subprojects JAR in main build/libs'
+    description = 'Cleans all projects, then compiles and copies JARs from common, fabric, and forge to build/libs'
 
     subprojects.each { subproject ->
-        if (subproject.name == 'fabric') {
-            dependsOn subproject.tasks.matching { it.name == 'remapJar' }
-        } else {
-            dependsOn subproject.tasks.matching { it.name == 'jar' }
+        if (subproject.name != 'bridge') {
+
+            def cleanTask = subproject.tasks.matching { it.name == 'clean' }
+            def buildTask = subproject.name == 'fabric' ?
+                    subproject.tasks.matching { it.name == 'remapJar' } :
+                    subproject.tasks.matching { it.name == 'jar' }
+
+            dependsOn cleanTask
+            dependsOn buildTask
+
+            buildTask.configureEach { task ->
+                task.mustRunAfter(cleanTask)
+            }
         }
     }
 
     subprojects.each { subproject ->
-        if (subproject.name == 'common') {
-            from(subproject.layout.buildDirectory.dir("devlibs")) {
-                include "*.jar"
-            }
-        } else {
-            from(subproject.layout.buildDirectory.dir("libs")) {
-                include "*.jar"
+        if (subproject.name != 'bridge') {
+            if (subproject.name == 'common') {
+                from(subproject.layout.buildDirectory.dir("devlibs")) {
+                    include "*.jar"
+                }
+            } else {
+                from(subproject.layout.buildDirectory.dir("libs")) {
+                    include "*.jar"
+                }
             }
         }
     }

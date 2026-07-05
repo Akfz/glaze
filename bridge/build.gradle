@@ -1,0 +1,46 @@
+plugins {
+    id 'java'
+}
+
+tasks.register('copyCommon') {
+    group = 'build'
+    description = 'Copies all code and resources from :common to :bridge/build/bridge'
+
+    inputs.dir(project(':common').file('src/main/java'))
+    inputs.dir(project(':common').file('src/main/resources'))
+    inputs.dir(project(':common').file('src/generated/java')).optional()
+    inputs.dir(project(':common').file('src/generated/resources')).optional()
+
+    def destJava = file('build/bridge/java')
+    def destRes = file('build/bridge/resources')
+
+    outputs.dir(destJava)
+    outputs.dir(destRes)
+
+    doLast {
+        delete destJava
+        delete destRes
+
+        copy {
+            from project(':common').file('src/main/java')
+
+            def genJava = project(':common').file('src/generated/java')
+            if (genJava.exists()) {
+                from genJava
+            }
+
+            into destJava
+        }
+
+        copy {
+            from project(':common').file('src/main/resources')
+
+            def genRes = project(':common').file('src/generated/resources')
+            if (genRes.exists()) {
+                from genRes
+            }
+
+            into destRes
+        }
+    }
+}
