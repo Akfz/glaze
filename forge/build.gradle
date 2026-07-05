@@ -1,0 +1,124 @@
+plugins {
+    id 'net.minecraftforge.gradle'
+    id 'org.spongepowered.mixin'
+}
+
+base {
+    archivesName = "${project.archives_base_name}-forge"
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+}
+
+minecraft {
+    mappings channel: 'official', version: "${project.minecraft_version}"
+    copyIdeResources = true
+
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'forge.earlydisplay.enable', 'false'
+
+            mods {
+                "${project.mod_id}" {
+                    source sourceSets.main
+                    source project(':common').sourceSets.main
+                }
+            }
+        }
+
+        client {
+            property 'mixin.config', "${project.mod_id}.mixins.json"
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+        }
+
+        server {
+            property 'mixin.config', "${project.mod_id}.mixins.json"
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+        }
+
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', "${project.mod_id}", '--all', '--output', file('src/generated/resources/'), '--existing', project(':common').file('src/main/resources/')
+        }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${project.forge_version}"
+    annotationProcessor "org.spongepowered:mixin:${project.mixin_version}:processor"
+
+    compileOnly "io.github.llamalad7:mixinextras-common:0.4.1"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
+
+    implementation project(path: ":common", configuration: "namedElements")
+}
+
+mixin {
+    add sourceSets.main, "${project.mod_id}.refmap.json"
+    config "${project.mod_id}.mixins.json"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+            srcDirs += project.project(':common').file("src/sharedCode/java")
+            srcDirs += project.project(':common').file("src/generated/java")
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+            srcDirs += project.project(':common').file("src/main/resources")
+            srcDirs += project.project(':common').file("src/generated/resources")
+        }
+    }
+}
+
+tasks.named('compileJava', JavaCompile) {
+    dependsOn project(':common').tasks.named('compileJava')
+    classpath += project(':common').sourceSets.main.output
+
+    options.compilerArgs << "-AoutRefMapFile=${projectDir}/build/resources/main/${project.mod_id}.refmap.json"
+    options.compilerArgs << "-AoutMapFileWithMappings=true"
+}
+
+tasks.named('processResources', ProcessResources) {
+    from project(':common').sourceSets.main.resources
+}
+
+tasks.named('jar', Jar).configure {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    from sourceSets.main.output
+    from project(':common').sourceSets.main.output
+
+    destinationDirectory.set(file("${project.layout.buildDirectory.get().asFile}/libs"))
+    archiveFileName = "${project.archives_base_name}-${project.mod_version}-forge.jar"
+
+    manifest {
+        attributes([
+                "Specification-Title"     : project.mod_id,
+                "Specification-Vendor"    : project.maven_group,
+                "Specification-Version"   : "1",
+                "Implementation-Title"    : project.name,
+                "Implementation-Version"  : project.mod_version,
+                "Implementation-Vendor"   : project.maven_group,
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+
+                "MixinConfigs"            : "${project.mod_id}.mixins.json"
+        ])
+    }
+
+    finalizedBy 'reobfJar'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << "-AmodLoaderTarget=forge"
+}

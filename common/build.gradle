@@ -1,0 +1,70 @@
+plugins {
+    id 'fabric-loom'
+}
+
+base {
+    archivesName = "${project.archives_base_name}-common"
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+}
+
+configurations {
+    embed
+    implementation.extendsFrom(embed)
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+
+    compileOnly "org.spongepowered:mixin:${project.mixin_version}"
+    compileOnly "org.ow2.asm:asm:9.5"
+    compileOnly "org.ow2.asm:asm-tree:9.5"
+
+    compileOnly "io.github.llamalad7:mixinextras-common:0.4.1"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
+}
+
+tasks.named('compileJava', JavaCompile) {
+    source += fileTree(dir: 'src/sharedCode/java', include: '**/*.java')
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            version: project.mod_version,
+            loader_version: project.fabric_loader_version,
+            minecraft_version: project.minecraft_version,
+            mod_id: project.mod_id,
+            mod_name: project.mod_name,
+            mod_description: project.mod_description,
+            mod_authors: project.mod_authors,
+            mod_license: project.mod_license,
+            mod_homepage: project.mod_homepage,
+            mod_issues: project.mod_issues,
+            mod_icon: project.mod_icon
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching('fabric.mod.json') {
+        expand replaceProperties
+    }
+}
+
+jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from sourceSets.main.output
+}

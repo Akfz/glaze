@@ -1,0 +1,85 @@
+plugins {
+    id 'fabric-loom'
+}
+
+base {
+    archivesName = "${project.archives_base_name}-fabric"
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+
+    compileOnly "io.github.llamalad7:mixinextras-common:0.4.1"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
+
+    implementation project(path: ":common", configuration: "namedElements")
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+            srcDirs += project(':common').file("src/sharedCode/java")
+            srcDirs += project(':common').file("src/generated/java")
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+            srcDirs += project(':common').file("src/main/resources")
+            srcDirs += project(':common').file("src/generated/resources")
+        }
+    }
+}
+
+tasks.named('compileJava', JavaCompile) {
+    dependsOn project(':common').tasks.named('compileJava')
+
+    classpath += project(':common').sourceSets.main.output
+}
+
+loom {
+    runs {
+        client {
+            client()
+            runDir "run"
+        }
+    }
+    mods {
+        "${project.mod_id}" {
+            sourceSet sourceSets.main
+            sourceSet project(':common').sourceSets.main
+        }
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude "META-INF/mods.toml"
+
+    var replaceProperties = [
+            minecraft_version: project.minecraft_version,
+            loader_version: project.fabric_loader_version,
+            version: project.mod_version
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching('fabric.mod.json') {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from sourceSets.main.output
+    from project(':common').sourceSets.main.output
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs << "-AmodLoaderTarget=fabric"
+}

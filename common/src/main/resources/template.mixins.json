@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "smth.template_mod.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "plugin": "n.paradox.aslib.mixin.plugin.AsLibMixinPlugin",
+  "mixins": [
+    "TestMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

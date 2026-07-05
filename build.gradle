@@ -1,0 +1,239 @@
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.tree.ClassNode
+
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    }
+    dependencies {
+        classpath "org.spongepowered:mixingradle:${project.mixingradle_version}"
+    }
+}
+
+allprojects {
+    apply plugin: 'java'
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    version = project.mod_version
+    group = project.maven_group
+}
+
+subprojects {
+    tasks.processResources {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        it.options.encoding = 'UTF-8'
+        it.options.release = 17
+    }
+
+    afterEvaluate {
+        def finalJarName = "${rootProject.archives_base_name}-${project.name}-${project.version}.jar"
+
+        def aslibJar = fileTree(dir: 'libs', include: 'aslib-common-*.jar')
+        dependencies {
+            implementation aslibJar
+        }
+
+        if (project.name != 'common') {
+            configurations {
+                embed
+                implementation.extendsFrom(embed)
+            }
+
+            // P.s if u want add and use aslib annotations(dontcompile, RegisterModule(auto registation) and more), uncomment this
+            /*
+            dependencies {
+                annotationProcessor aslibJar
+            }
+             */
+
+            if (project.name == 'fabric') {
+                tasks.named('remapJar') { task ->
+                    task.archiveFileName = finalJarName
+                    task.from {
+                        configurations.embed.collect { it.isDirectory() ? it : zipTree(it) }
+                    }
+
+                    if (file("LICENSE").exists()) {
+                        task.from("LICENSE") {
+                            rename { "${it}_${project.base.archivesName.get()}" }
+                        }
+                    }
+                }
+            } else {
+                tasks.named('jar', Jar) { Jar task ->
+                    task.duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+                    task.destinationDirectory.set(layout.buildDirectory.dir("libs"))
+                    task.archiveFileName = finalJarName
+
+                    task.from {
+                        configurations.embed.collect { it.isDirectory() ? it : zipTree(it) }
+                    }
+
+                    if (file("LICENSE").exists()) {
+                        task.from("LICENSE") {
+                            rename { "${it}_${project.base.archivesName.get()}" }
+                        }
+                    }
+                }
+            }
+
+            tasks.named('processResources', ProcessResources).configure {
+                duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+                if (project.name == 'forge') {
+                    exclude 'fabric.mod.json'
+                }
+
+                if (project.name == 'neoforge') {
+                    exclude 'fabric.mod.json'
+                    exclude 'quilt.mod.json'
+                }
+
+                if (project.name == 'fabric') {
+                    exclude 'META-INF/mods.toml'
+                    exclude 'pack.mcmeta'
+                }
+            }
+        } else {
+            tasks.named('jar', Jar) { Jar task ->
+                task.duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+                task.archiveFileName = finalJarName
+            }
+        }
+    }
+
+    tasks.withType(Jar).configureEach {
+        def targetAnnotation = "Ln/paradox/aslib/annotation/DontCompile;"
+
+        eachFile { fileCopyDetails ->
+            if (fileCopyDetails.name.endsWith('.class')) {
+                def file = fileCopyDetails.file
+
+                if (file.exists()) {
+                    def inputStream = file.newInputStream()
+                    try {
+                        def reader = new ClassReader(inputStream)
+                        def classNode = new ClassNode()
+                        reader.accept(classNode, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES)
+
+                        def hasAnnotation = classNode.invisibleAnnotations?.any { it.desc == targetAnnotation } ||
+                                classNode.visibleAnnotations?.any { it.desc == targetAnnotation }
+
+                        if (hasAnnotation) {
+                            fileCopyDetails.exclude()
+                        }
+                    } catch (Exception e) {
+                    } finally {
+                        inputStream.close()
+                    }
+                }
+            }
+        }
+    }
+}
+
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
+
+abstract class ResourceCleanerService implements BuildService<BuildServiceParameters.None>, AutoCloseable {
+    final List<File> filesToDelete = Collections.synchronizedList(new ArrayList<File>())
+
+    @Override
+    void close() {
+        println "[AsLib-Build] Clean libs start"
+        filesToDelete.each { file ->
+            if (file.exists()) {
+                try {
+                    file.delete()
+                    println "[AsLib-Build] Deleted temporary file: ${file.name}"
+
+                    if (file.parentFile.exists() && file.parentFile.list().length == 0) {
+                        file.parentFile.delete()
+                    }
+                } catch (Exception e) {
+                }
+            }
+        }
+        println "[AsLib-Build] Clean libs finished"
+    }
+}
+
+def cleanerProvider = gradle.sharedServices.registerIfAbsent("resourceCleaner", ResourceCleanerService) {}
+def cleaner = cleanerProvider.get()
+
+println "[AsLib-Build] Start copying libs"
+
+def libsDir = rootProject.file("libs")
+def fabricTargetDir = rootProject.file("fabric/run/mods")
+def forgeTargetDir = rootProject.file("forge/run/mods")
+
+if (libsDir.exists() && libsDir.isDirectory()) {
+    libsDir.listFiles().each { file ->
+        if (file.isFile() && file.name.endsWith(".jar")) {
+            def targetDir = null
+
+            if (file.name.contains("-fabric-")) {
+                targetDir = fabricTargetDir
+                println "[AsLib-Build] Copy fabric-jar: ${file.name}"
+            } else if (file.name.contains("-forge-")) {
+                targetDir = forgeTargetDir
+                println "[AsLib-Build] Copy forge-jar: ${file.name}"
+            }
+
+            if (targetDir != null) {
+                try {
+                    if (!targetDir.exists()) {
+                        targetDir.mkdirs()
+                    }
+                    def targetFile = new File(targetDir, file.name)
+                    Files.copy(file.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+
+                    cleaner.filesToDelete.add(targetFile)
+                } catch (Exception e) {
+                    println "[AsLib-Build] Error copying ${file.name}: ${e.message}"
+                }
+            }
+        }
+    }
+} else {
+    println "[AsLib-Build] Warning: 'libs' directory not found!"
+}
+
+tasks.register('compileAll', Copy) {
+    group = 'build'
+    description = 'Compile and copy from all subprojects JAR in main build/libs'
+
+    subprojects.each { subproject ->
+        if (subproject.name == 'fabric') {
+            dependsOn subproject.tasks.matching { it.name == 'remapJar' }
+        } else {
+            dependsOn subproject.tasks.matching { it.name == 'jar' }
+        }
+    }
+
+    subprojects.each { subproject ->
+        if (subproject.name == 'common') {
+            from(subproject.layout.buildDirectory.dir("devlibs")) {
+                include "*.jar"
+            }
+        } else {
+            from(subproject.layout.buildDirectory.dir("libs")) {
+                include "*.jar"
+            }
+        }
+    }
+
+    into(layout.buildDirectory.dir("libs"))
+
+    outputs.upToDateWhen { false }
+}

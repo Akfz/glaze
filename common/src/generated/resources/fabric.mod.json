@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "template",
+  "version": "1.0-SNAPSHOT",
+  "name": "TEMPLATE",
+  "description": "Library for structural resource packs",
+  "license": "MIT <- U CAN CHANGE",
+  "icon": "assets/template/icon.png",
+  "environment": "*",
+  "authors": [
+    "Akaize",
+    "SweetB1ans <- U CAN CHANGE"
+  ],
+  "contact": {
+    "homepage": "",
+    "sources": ""
+  },
+  "entrypoints": { "main": [ "smth.template_mod.fabric.FabricInit" ] },
+  "mixins": [ "template.mixins.json" ],
+  "depends": {
+    "fabricloader": ">=0.15.11",
+    "minecraft": "1.20.1"
+  }
+}
