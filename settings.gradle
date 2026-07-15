@@ -1,13 +1,10 @@
 pluginManagement {
     repositories {
+        maven { url = 'https://maven.parchmentmc.org' }
         maven { url = 'https://maven.minecraftforge.net/' }
         maven { url = 'https://maven.fabricmc.net/' }
         mavenCentral()
         gradlePluginPortal()
-    }
-    plugins {
-        id 'net.minecraftforge.gradle' version "${forge_gradle_version}"
-        id 'fabric-loom' version "${fabric_loom_version}"
     }
 }
 
@@ -15,9 +12,8 @@ plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
-rootProject.name = 'Template' //u can change
+rootProject.name = 'Glaze'
 
-//RECOMMEND : write all code (mixins too) in common and in fabric and forge only for init and compile (P.s neoforge supported, quilt is not)
 include 'bridge' // DONT WRITE ANYTHING INSIDE
 include 'common'
 include 'fabric'

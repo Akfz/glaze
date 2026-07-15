@@ -1,22 +1,17 @@
 {
   "schemaVersion": 1,
-  "id": "template",
-  "version": "1.0-SNAPSHOT",
-  "name": "TEMPLATE",
+  "id": "glze",
+  "version": "1",
+  "name": "Glaze",
   "description": "Library for structural resource packs",
-  "license": "MIT <- U CAN CHANGE",
-  "icon": "assets/template/icon.png",
+  "license": "MIT",
+  "icon": "assets/glze/icon.png",
   "environment": "*",
   "authors": [
-    "Akaize",
-    "SweetB1ans <- U CAN CHANGE"
+    "Akaize"
   ],
-  "contact": {
-    "homepage": "",
-    "sources": ""
-  },
-  "entrypoints": { "main": [ "smth.template_mod.fabric.FabricInit" ] },
-  "mixins": [ "template.mixins.json" ],
+  "entrypoints": { "main": [ "v.akfz.glaze.GlazeMain_fabric" ] },
+  "mixins": [ "glze.mixins.json" ],
   "depends": {
     "fabricloader": ">=0.15.11",
     "minecraft": "1.20.1"

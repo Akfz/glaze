@@ -33,7 +33,7 @@ subprojects {
         it.options.release = 17
     }
 
-    if (project.name != 'common') {
+    if (project.name != 'common' && project.name != 'bridge') {
         configurations {
             embed
             implementation.extendsFrom(embed)
@@ -46,9 +46,12 @@ subprojects {
         def aslibJar = fileTree(dir: 'libs', include: 'aslib-common-*.jar')
         dependencies {
             implementation aslibJar
+
+            compileOnly("org.projectlombok:lombok:1.18.38")
+            annotationProcessor("org.projectlombok:lombok:1.18.38")
         }
 
-        if (project.name != 'common') {
+        if (project.name != 'common' && project.name != 'bridge') {
             dependencies {
                 annotationProcessor aslibJar
             }
@@ -110,7 +113,7 @@ subprojects {
     }
 
     tasks.withType(Jar).configureEach {
-        def targetAnnotation = "Ln/paradox/aslib/annotation/DontCompile;"
+        def targetAnnotation = "Lv/akfz/aslib/annotation/DontCompile;"
 
         eachFile { fileCopyDetails ->
             if (fileCopyDetails.name.endsWith('.class')) {
@@ -216,14 +219,20 @@ tasks.register('compileAll', Copy) {
         if (subproject.name != 'bridge') {
 
             def cleanTask = subproject.tasks.matching { it.name == 'clean' }
-            def buildTask = subproject.name == 'fabric' ?
-                    subproject.tasks.matching { it.name == 'remapJar' } :
-                    subproject.tasks.matching { it.name == 'jar' }
+
+            def buildTasks
+            if (subproject.name == 'fabric') {
+                buildTasks = subproject.tasks.matching { it.name == 'remapJar' }
+            } else if (subproject.name == 'forge') {
+                buildTasks = subproject.tasks.matching { it.name == 'jar' || it.name == 'devJar' }
+            } else {
+                buildTasks = subproject.tasks.matching { it.name == 'jar' }
+            }
 
             dependsOn cleanTask
-            dependsOn buildTask
+            dependsOn buildTasks
 
-            buildTask.configureEach { task ->
+            buildTasks.configureEach { task ->
                 task.mustRunAfter(cleanTask)
             }
         }

@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom'
+    id 'fabric-loom' version "${fabric_loom_version}"
 }
 
 base {
@@ -18,7 +18,10 @@ configurations {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.officialMojangMappings()
+    mappings loom.layered() {
+        officialMojangMappings()
+        parchment("org.parchmentmc.data:parchment-1.20.1:2023.09.03")
+    }
 
     compileOnly "org.spongepowered:mixin:${project.mixin_version}"
     compileOnly "org.ow2.asm:asm:9.5"
