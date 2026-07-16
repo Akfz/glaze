@@ -267,6 +267,7 @@ public class AddictiveLight implements RenderModule {
 
         blitColor(mc.getMainRenderTarget(), pingBuffer);
 
+        DataManager.INSTANCE.getLightManager().checkAndSetBlockLights();
         DataManager.INSTANCE.getVoxelGrid().update();
         materialPass.render(materialAlbedoBuffer, materialNormalBuffer, materialPbrBuffer, quadMesh, viewMatrix, projMatrix);
 

@@ -3,12 +3,19 @@ package v.akfz.glaze.addictivelight.gui;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 import v.akfz.aslib.gui.widget.api.render.RenderPart;
 import v.akfz.aslib.gui.widget.impl.button.ButtonWidget;
 import v.akfz.aslib.gui.widget.impl.button.CheckboxWidget;
+import v.akfz.aslib.gui.widget.impl.picker.ColorPickerWidget;
 import v.akfz.aslib.gui.widget.impl.text.TextArea;
+import v.akfz.aslib.render.color.Color;
 import v.akfz.aslib.util.GlobalUtils;
+import v.akfz.aslib.util.json.GsonHelper;
+import v.akfz.aslib.util.json.JsonData;
+import v.akfz.aslib.util.json.JsonFile;
 import v.akfz.glaze.addictivelight.data.SettingsData;
+import v.akfz.glaze.addictivelight.data.light.LightType;
 import v.akfz.glaze.addictivelight.data.manager.DataManager;
 import v.akfz.glaze.addictivelight.gui.widget.BlenderSpinnerWidget;
 import v.akfz.glaze.addictivelight.gui.widget.OptionSelectorWidget;
@@ -18,11 +25,14 @@ import v.akfz.glaze.addictivelight.render.passes.denoiser.Denoiser;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.Consumer;
 
 public class MainGui extends Screen {
     private ResizableScrollContainer leftPanel;
     private ResizableScrollContainer rightPanel;
     private int selectedTab = 0;
+
+    private String selectedBlockKey = null;
 
     private float splitRatio = 0.35f;
     private boolean draggingSplit = false;
@@ -115,7 +125,35 @@ public class MainGui extends Screen {
         this.leftPanel.setScrollbarBgColor(0x33001122);
         this.addRenderableWidget(leftPanel);
 
-        this.rightPanel = new ResizableScrollContainer(rightX, py, rightW, pHeight);
+        SettingsData s = DataManager.INSTANCE.getSettingsData();
+        ColorPickerWidget blockColorPicker;
+
+        if (selectedTab == 5 && selectedBlockKey != null) {
+            SettingsData.BlockLightSettings l = s.customLightBlocks.get(selectedBlockKey);
+            if (l != null) {
+                int pickerH = 80;
+                int pickerY = py + 5;
+
+                Color blockColor = new Color(l.r, l.g, l.b);
+                blockColorPicker = new ColorPickerWidget(rightX + 5, pickerY, rightW - 15, pickerH, blockColor, col -> {
+                    l.r = (float) col.getRed();
+                    l.g = (float) col.getGreen();
+                    l.b = (float) col.getBlue();
+                });
+                blockColorPicker.setBgColor(0x66051122);
+                blockColorPicker.setBorderColor(0xAA0055AA);
+                blockColorPicker.setSliderBgColor(0x33001122);
+                this.addRenderableWidget(blockColorPicker);
+
+                int offset = pickerH + 10;
+                this.rightPanel = new ResizableScrollContainer(rightX, py + offset, rightW, pHeight - offset);
+            } else {
+                this.rightPanel = new ResizableScrollContainer(rightX, py, rightW, pHeight);
+            }
+        } else {
+            this.rightPanel = new ResizableScrollContainer(rightX, py, rightW, pHeight);
+        }
+
         this.rightPanel.setContentWidth(rightW);
         this.rightPanel.setBgColor(rightBgColor);
         this.rightPanel.setScrollbarColor(0xAA00A2FF);
@@ -136,7 +174,20 @@ public class MainGui extends Screen {
             this.mainRenderer = blueButton;
             this.setClickFunc((b, m) -> {
                 selectedTab = 0;
-                rebuildRightPanel();
+                selectedBlockKey = null;
+                MainGui.this.clearWidgets();
+                MainGui.this.init();
+            });
+        }});
+        curY += 22;
+
+        leftPanel.addWidget(new ButtonWidget(5, curY, width, 18, "Кастомные блоки") {{
+            this.mainRenderer = blueButton;
+            this.setClickFunc((b, m) -> {
+                selectedTab = 5;
+                selectedBlockKey = null;
+                MainGui.this.clearWidgets();
+                MainGui.this.init();
             });
         }});
         curY += 22;
@@ -145,7 +196,9 @@ public class MainGui extends Screen {
             this.mainRenderer = blueButton;
             this.setClickFunc((b, m) -> {
                 selectedTab = 4;
-                rebuildRightPanel();
+                selectedBlockKey = null;
+                MainGui.this.clearWidgets();
+                MainGui.this.init();
             });
         }});
         curY += 22;
@@ -155,7 +208,9 @@ public class MainGui extends Screen {
                 this.mainRenderer = blueButton;
                 this.setClickFunc((b, m) -> {
                     selectedTab = 1;
-                    rebuildRightPanel();
+                    selectedBlockKey = null;
+                    MainGui.this.clearWidgets();
+                    MainGui.this.init();
                 });
             }});
             curY += 22;
@@ -164,7 +219,9 @@ public class MainGui extends Screen {
                 this.mainRenderer = blueButton;
                 this.setClickFunc((b, m) -> {
                     selectedTab = 2;
-                    rebuildRightPanel();
+                    selectedBlockKey = null;
+                    MainGui.this.clearWidgets();
+                    MainGui.this.init();
                 });
             }});
             curY += 22;
@@ -175,7 +232,9 @@ public class MainGui extends Screen {
                 this.mainRenderer = blueButton;
                 this.setClickFunc((b, m) -> {
                     selectedTab = 3;
-                    rebuildRightPanel();
+                    selectedBlockKey = null;
+                    MainGui.this.clearWidgets();
+                    MainGui.this.init();
                 });
             }});
             curY += 22;
@@ -310,6 +369,148 @@ public class MainGui extends Screen {
                 rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.1, 32.0, s.svgfLumaThreshold, "Порог яркости (Luma)", false, v -> s.svgfLumaThreshold = v.floatValue()));
                 curY += 22;
             }
+        } else if (selectedTab == 5) {
+            if (selectedBlockKey != null) {
+                SettingsData.BlockLightSettings l = s.customLightBlocks.get(selectedBlockKey);
+                if (l == null) {
+                    selectedBlockKey = null;
+                    MainGui.this.clearWidgets();
+                    MainGui.this.init();
+                    return;
+                }
+
+                rightPanel.addWidget(new ButtonWidget(5, curY, width, 18, "<- Назад к списку блоков") {{
+                    this.mainRenderer = blueButton;
+                    this.setClickFunc((b, m) -> {
+                        selectedBlockKey = null;
+                        MainGui.this.clearWidgets();
+                        MainGui.this.init();
+                    });
+                }});
+                curY += 22;
+
+                rightPanel.addWidget(new ButtonWidget(5, curY, width, 14, "Редактирование: " + selectedBlockKey) {{
+                    this.enabled = false;
+                    this.mainRenderer = (g, mx, my, d, rx, ry, rw, rh, ex) -> g.drawString(font, text, rx, ry + 2, 0xFFA0A2FF, false);
+                }});
+                curY += 16;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.1, 1000.0, l.intensity, "Интенсивность", false, v -> l.intensity = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.1, 128.0, l.radius, "Радиус свечения", false, v -> l.radius = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new OptionSelectorWidget(5, curY, width, 18, "Тип источника", new int[]{0, 1, 2, 3, 4}, l.type, blueButton, v -> {
+                    l.type = v;
+                    rebuildRightPanel();
+                }) {
+                    @Override
+                    public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
+                        this.text = "Тип: " + LightType.values()[l.type % LightType.values().length].name();
+                        super.render(graphics, mouseX, mouseY, delta);
+                    }
+                });
+                curY += 22;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.0, 5.0, l.linear, "Линейный спад света", false, v -> l.linear = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.0, 5.0, l.quadratic, "Квадратичный спад света", false, v -> l.quadratic = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.1, 10.0, l.falloffExponent, "Резкость затухания (Экспонента)", false, v -> l.falloffExponent = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new CheckboxWidget(5, curY, width, 16, "Тени от блока") {{
+                    this.mainRenderer = blueCheckbox;
+                    this.setChecked(l.shadowsEnabled);
+                    this.setOnToggle(v -> l.shadowsEnabled = v);
+                }});
+                curY += 20;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.0, 5.0, l.shadowSoftness, "Мягкость теней", false, v -> l.shadowSoftness = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.0, 0.1, l.shadowBias, "Смещение тени (Bias)", false, v -> l.shadowBias = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new CheckboxWidget(5, curY, width, 16, "Объемный свет (Volumetric)") {{
+                    this.mainRenderer = blueCheckbox;
+                    this.setChecked(l.volumetric);
+                    this.setOnToggle(v -> l.volumetric = v);
+                }});
+                curY += 20;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.0, 20.0, l.volumetricStrength, "Сила объема", false, v -> l.volumetricStrength = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, -0.99, 0.99, l.mieG, "Анизотропия фазы (Mie G)", false, v -> l.mieG = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.0, 1.0, l.fogDensity, "Плотность тумана", false, v -> l.fogDensity = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new BlenderSpinnerWidget(5, curY, width, 18, 0.0, 1.0, l.fogAbsorption, "Поглощение тумана", false, v -> l.fogAbsorption = v.floatValue()));
+                curY += 22;
+
+                rightPanel.addWidget(new ButtonWidget(5, curY, width, 18, "Удалить настройку блока") {{
+                    this.mainRenderer = blueButton;
+                    this.setClickFunc((b, m) -> {
+                        s.customLightBlocks.remove(selectedBlockKey);
+                        selectedBlockKey = null;
+                        MainGui.this.clearWidgets();
+                        MainGui.this.init();
+                    });
+                }});
+                curY += 22;
+            } else {
+                rightPanel.addWidget(new ButtonWidget(5, curY, width, 14, "Добавить настройку блока (ID):") {{
+                    this.enabled = false;
+                    this.mainRenderer = (g, mx, my, d, rx, ry, rw, rh, ex) -> g.drawString(font, text, rx, ry + 2, 0xFFA0A2FF, false);
+                }});
+                curY += 16;
+
+                TextArea addBlockArea = new TextArea(5, curY, width, 40);
+                addBlockArea.setPlaceholder("Например: minecraft:sea_lantern");
+                rightPanel.addWidget(addBlockArea);
+                curY += 45;
+
+                rightPanel.addWidget(new ButtonWidget(5, curY, width, 18, "Добавить блок") {{
+                    this.mainRenderer = blueButton;
+                    this.setClickFunc((b, m) -> {
+                        String val = addBlockArea.getText().trim();
+                        if (!val.isEmpty() && !s.customLightBlocks.containsKey(val)) {
+                            SettingsData.BlockLightSettings defaultSettings = new SettingsData.BlockLightSettings();
+                            defaultSettings.intensity = 40.0f;
+                            defaultSettings.radius = 10.0f;
+                            s.customLightBlocks.put(val, defaultSettings);
+                            selectedBlockKey = val;
+                            MainGui.this.clearWidgets();
+                            MainGui.this.init();
+                        }
+                    });
+                }});
+                curY += 22;
+
+                rightPanel.addWidget(new ButtonWidget(5, curY, width, 14, "Список настроенных блоков:") {{
+                    this.enabled = false;
+                    this.mainRenderer = (g, mx, my, d, rx, ry, rw, rh, ex) -> g.drawString(font, text, rx, ry + 2, 0xFFA0A2FF, false);
+                }});
+                curY += 16;
+
+                for (String blockKey : s.customLightBlocks.keySet()) {
+                    rightPanel.addWidget(new ButtonWidget(5, curY, width, 18, blockKey) {{
+                        this.mainRenderer = blueButton;
+                        this.setClickFunc((b, m) -> {
+                            selectedBlockKey = blockKey;
+                            MainGui.this.clearWidgets();
+                            MainGui.this.init();
+                        });
+                    }});
+                    curY += 22;
+                }
+            }
         } else {
             rightPanel.addWidget(new CheckboxWidget(5, curY, width, 16, "Режим разработчика") {{
                 this.mainRenderer = blueCheckbox;
@@ -319,8 +520,8 @@ public class MainGui extends Screen {
                     if (!v) {
                         selectedTab = 0;
                     }
-                    rebuildLeftPanel();
-                    rebuildRightPanel();
+                    MainGui.this.clearWidgets();
+                    MainGui.this.init();
                 });
             }});
             curY += 20;
@@ -377,6 +578,28 @@ public class MainGui extends Screen {
                 rebuildRightPanel();
             }));
             curY += 22;
+
+            rightPanel.addWidget(new ButtonWidget(5, curY, width, 14, "Отключить ванильный свет у блоков (через запятую):") {{
+                this.enabled = false;
+                this.mainRenderer = (g, mx, my, d, rx, ry, rw, rh, ex) -> g.drawString(font, text, rx, ry + 2, 0xFFA0A2FF, false);
+            }});
+            curY += 16;
+
+            TextArea disabledBlocksArea = new TextArea(5, curY, width, 60);
+            disabledBlocksArea.setPlaceholder("Пример: minecraft:torch, minecraft:glowstone");
+            disabledBlocksArea.setText(String.join(", ", s.disabledLightBlocks));
+            disabledBlocksArea.setLineRenderer((g, line, rx, ry, idx, startIdx, defColor) -> {
+                g.drawString(font, line, rx, ry, 0xFFFFFFFF, false);
+                s.disabledLightBlocks.clear();
+                for (String blockId : disabledBlocksArea.getText().split(",")) {
+                    String trimmed = blockId.trim();
+                    if (!trimmed.isEmpty()) {
+                        s.disabledLightBlocks.add(trimmed);
+                    }
+                }
+            });
+            rightPanel.addWidget(disabledBlocksArea);
+            curY += 65;
 
             if (isShadowSizeChanged()) {
                 curY += 10;
@@ -471,10 +694,10 @@ public class MainGui extends Screen {
     @Override
     public void onClose() {
         super.onClose();
-        Path setPath = v.akfz.aslib.util.GlobalUtils.getAsLibCFGPath().resolve("glaze/light.json");
-        v.akfz.aslib.util.json.GsonHelper.write(new v.akfz.aslib.util.json.JsonFile<v.akfz.aslib.util.json.JsonData>() {
+        Path setPath = GlobalUtils.getAsLibCFGPath().resolve("glaze/light.json");
+        GsonHelper.write(new JsonFile<>() {
             @Override
-            public v.akfz.aslib.util.json.JsonData data() {
+            public JsonData data() {
                 return DataManager.INSTANCE.getSettingsData();
             }
 
@@ -492,10 +715,10 @@ public class MainGui extends Screen {
 
     public static class KeybindButtonWidget extends ButtonWidget {
         private final String actionName;
-        private final java.util.function.Consumer<Integer> onKeySet;
+        private final Consumer<Integer> onKeySet;
         private boolean listening = false;
 
-        public KeybindButtonWidget(int x, int y, int width, int height, String actionName, int currentKey, java.util.function.Consumer<Integer> onKeySet, RenderPart renderer) {
+        public KeybindButtonWidget(int x, int y, int width, int height, String actionName, int currentKey, Consumer<Integer> onKeySet, RenderPart renderer) {
             super(x, y, width, height, actionName + ": " + getKeyName(currentKey));
             this.actionName = actionName;
             this.onKeySet = onKeySet;
@@ -521,7 +744,7 @@ public class MainGui extends Screen {
         }
 
         private static String getKeyName(int keyCode) {
-            String name = org.lwjgl.glfw.GLFW.glfwGetKeyName(keyCode, 0);
+            String name = GLFW.glfwGetKeyName(keyCode, 0);
             if (name != null) return name.toUpperCase();
             return switch (keyCode) {
                 case 290 -> "F1";

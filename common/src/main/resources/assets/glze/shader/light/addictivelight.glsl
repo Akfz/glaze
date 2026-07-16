@@ -184,7 +184,7 @@ void main() {
     float emissive = pbr.b * 10.0;
     float specularVal = pbr.a;
 
-    if (!isSky) lightAccum += albedo_pbr * emissive;
+    vec3 emissiveColor = albedo_pbr;
 
     vec3 V = normalize(-pixelWorldPos);
     float viewDist = isSky ? uFar : length(pixelWorldPos);
@@ -207,6 +207,10 @@ void main() {
         float dist = length(toLight);
         vec3 L = normalize(toLight);
         float NoL = isSky ? 0.0 : max(dot(N, L), 0.0);
+
+        if (dist < 0.8 && emissive > 0.01) {
+            emissiveColor = max(emissiveColor, lightCol);
+        }
 
         int type = int(uLights[i].dirType.w + 0.5);
 
@@ -422,8 +426,8 @@ void main() {
             if (cosAngle > 0.0) {
                 float gFactor = mix(0.15, 3.5, (gVal + 1.0) * 0.5);
 
-                float glowExponent = (128.0 / gFactor) + 128.0 * distToLightCamera;
                 float coreExponent = (2048.0 / gFactor) + 1024.0 * distToLightCamera;
+                float glowExponent = (128.0 / gFactor) + 128.0 * distToLightCamera;
 
                 float core = pow(cosJittered, coreExponent);
                 float glow = pow(cosJittered, glowExponent);
@@ -438,6 +442,10 @@ void main() {
                 lightAccum += miePoint;
             }
         }
+    }
+
+    if (!isSky) {
+        lightAccum += emissiveColor * emissive;
     }
 
     FragColor = vec4(lightAccum, 1.0);

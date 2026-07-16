@@ -5,7 +5,9 @@ import v.akfz.aslib.util.json.JsonData;
 import v.akfz.glaze.addictivelight.render.passes.denoiser.Denoiser;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class SettingsData implements JsonData {
     public int materialXZRadius = 32;
@@ -53,4 +55,33 @@ public class SettingsData implements JsonData {
 
     public boolean isAllAllowedToChangeLightSources = false;
     public List<String> allowedPlayers = new ArrayList<>();
+
+    public List<String> disabledLightBlocks = new ArrayList<>();
+
+    public Map<String, BlockLightSettings> customLightBlocks = new HashMap<>();
+
+    public static class BlockLightSettings {
+        public float r = 1.0f;
+        public float g = 1.0f;
+        public float b = 1.0f;
+        public float intensity = 40.0f;
+        public float radius = 10.0f;
+        public int type = 0;
+        public float linear = 0.09f;
+        public float quadratic = 0.032f;
+        public float falloffExponent = 2.0f;
+        public boolean shadowsEnabled = true;
+        public float shadowSoftness = 0.05f;
+        public float shadowBias = 0.002f;
+        public boolean volumetric = false;
+        public float volumetricStrength = 0.0f;
+        public float mieG = 0.0f;
+        public float fogDensity = 0.05f;
+        public float fogAbsorption = 0.1f;
+        public float width = 1.0f;
+        public float height = 1.0f;
+        public float sourceSize = 0.05f;
+        public float shadowNear = 0.2f;
+        public float shadowFar = 64.0f;
+    }
 }

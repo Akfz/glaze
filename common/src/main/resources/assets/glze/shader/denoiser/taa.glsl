@@ -12,6 +12,14 @@ float getLuminance(vec3 color) {
     return dot(color, vec3(0.2126, 0.7152, 0.0722));
 }
 
+vec3 tonemap(vec3 color) {
+    return color / (1.0 + max(0.0, getLuminance(color)));
+}
+
+vec3 untonemap(vec3 color) {
+    return color / max(1e-5, 1.0 - getLuminance(color));
+}
+
 void main() {
     vec4 current = texture(uCurrentTex, vTexCoord);
     vec4 history = texture(uHistoryTex, vTexCoord);
@@ -23,8 +31,9 @@ void main() {
     for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
             vec3 neighbor = texture(uCurrentTex, vTexCoord + vec2(x, y) * texelSize).rgb;
-            sum += neighbor;
-            sum2 += neighbor * neighbor;
+            vec3 neighborMap = tonemap(neighbor);
+            sum += neighborMap;
+            sum2 += neighborMap * neighborMap;
         }
     }
 
@@ -33,13 +42,13 @@ void main() {
 
     vec3 minColor = mean - uVarianceScale * stdDev;
     vec3 maxColor = mean + uVarianceScale * stdDev;
-    vec3 clampedHistory = clamp(history.rgb, minColor, maxColor);
 
-    vec3 currentMap = current.rgb / (1.0 + getLuminance(current.rgb));
-    vec3 historyMap = clampedHistory / (1.0 + getLuminance(clampedHistory));
+    vec3 historyMap = tonemap(history.rgb);
+    vec3 clampedHistoryMap = clamp(historyMap, minColor, maxColor);
 
-    vec3 blended = mix(historyMap, currentMap, uBlendFactor);
-    blended = blended / (1.0 - getLuminance(blended) + 1e-6);
+    vec3 currentMap = tonemap(current.rgb);
+    vec3 blendedMap = mix(clampedHistoryMap, currentMap, uBlendFactor);
+    vec3 blended = untonemap(blendedMap);
 
     FragColor = vec4(max(vec3(0.0), blended), current.a);
 }

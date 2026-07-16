@@ -9,6 +9,7 @@
     "client.MinecraftMixin",
     "client.LevelRendererAccessor",
     "client.MouseHandlerMixin",
+    "client.BlockStateBaseMixin",
     "MinecraftSrvMixin",
     "PlayerListMixin"
   ],

@@ -391,6 +391,10 @@ public class ShadowPass implements RenderPass {
                         for (int y = minY; y <= maxY; y++) {
                             for (int z = startZ; z <= endZ; z++) {
                                 for (int x = startX; x <= endX; x++) {
+                                    if (x == center.getX() && y == center.getY() && z == center.getZ()) {
+                                        continue;
+                                    }
+
                                     double dx = x + 0.5 - lightX;
                                     double dy = y + 0.5 - lightY;
                                     double dz = z + 0.5 - lightZ;
@@ -447,6 +451,10 @@ public class ShadowPass implements RenderPass {
                             for (int y = minY; y <= maxY; y++) {
                                 for (int z = startZ; z <= endZ; z++) {
                                     for (int x = startX; x <= endX; x++) {
+                                        if (x == center.getX() && y == center.getY() && z == center.getZ()) {
+                                            continue;
+                                        }
+
                                         double dx = x + 0.5 - lightX;
                                         double dy = y + 0.5 - lightY;
                                         double dz = z + 0.5 - lightZ;
@@ -669,37 +677,44 @@ public class ShadowPass implements RenderPass {
 
             float partialTicks = mc.getFrameTime();
 
-            for (var entity : entitiesToRender) {
-                double smoothX = Mth.lerp(partialTicks, entity.xOld, entity.getX());
-                double smoothY = Mth.lerp(partialTicks, entity.yOld, entity.getY());
-                double smoothZ = Mth.lerp(partialTicks, entity.zOld, entity.getZ());
+            boolean originalHitboxes = entityRenderer.shouldRenderHitBoxes();
+            entityRenderer.setRenderHitBoxes(false);
 
-                double dx = smoothX - lightX;
-                double dy = smoothY + (entity.getBbHeight() * 0.5) - lightY;
-                double dz = smoothZ - lightZ;
+            try {
+                for (var entity : entitiesToRender) {
+                    double smoothX = Mth.lerp(partialTicks, entity.xOld, entity.getX());
+                    double smoothY = Mth.lerp(partialTicks, entity.yOld, entity.getY());
+                    double smoothZ = Mth.lerp(partialTicks, entity.zOld, entity.getZ());
 
-                if (isOutsideFace(light.isOmnidirectional(), directionIndex, dx, dy, dz)) {
-                    continue;
+                    double dx = smoothX - lightX;
+                    double dy = smoothY + (entity.getBbHeight() * 0.5) - lightY;
+                    double dz = smoothZ - lightZ;
+
+                    if (isOutsideFace(light.isOmnidirectional(), directionIndex, dx, dy, dz)) {
+                        continue;
+                    }
+
+                    poseStack.pushPose();
+                    poseStack.translate(smoothX, smoothY, smoothZ);
+
+                    EntityMaterial mat = MaterialManager.getEntityMaterial(entity);
+
+                    RenderSystem.setShaderColor(mat.getTintR(), mat.getTintG(), mat.getTintB(), mat.getOpacity());
+
+                    entityRenderer.render(
+                            entity,
+                            0.0, 0.0, 0.0,
+                            entity.getYRot(),
+                            partialTicks,
+                            poseStack,
+                            entityBufferSource,
+                            15728880
+                    );
+
+                    poseStack.popPose();
                 }
-
-                poseStack.pushPose();
-                poseStack.translate(smoothX, smoothY, smoothZ);
-
-                EntityMaterial mat = MaterialManager.getEntityMaterial(entity);
-
-                RenderSystem.setShaderColor(mat.getTintR(), mat.getTintG(), mat.getTintB(), mat.getOpacity());
-
-                entityRenderer.render(
-                        entity,
-                        0.0, 0.0, 0.0,
-                        entity.getYRot(),
-                        partialTicks,
-                        poseStack,
-                        entityBufferSource,
-                        15728880
-                );
-
-                poseStack.popPose();
+            } finally {
+                entityRenderer.setRenderHitBoxes(originalHitboxes);
             }
             entityBufferSource.endBatch();
             RenderSystem.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);

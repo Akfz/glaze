@@ -26,6 +26,8 @@ public class RedactorGui extends Screen {
     private RenderPart blueButton;
     private RenderPart blueCheckbox;
 
+    private ColorPickerWidget blockColorPicker;
+
     public RedactorGui(Component title) {
         super(title);
         initRenderers();

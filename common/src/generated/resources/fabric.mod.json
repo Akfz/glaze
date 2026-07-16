@@ -3,7 +3,7 @@
   "id": "glze",
   "version": "1",
   "name": "Glaze",
-  "description": "Library for structural resource packs",
+  "description": "warning, idk why, but fabric version is unstable and may crash by joke",
   "license": "MIT",
   "icon": "assets/glze/icon.png",
   "environment": "*",

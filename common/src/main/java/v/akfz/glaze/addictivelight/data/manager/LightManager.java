@@ -1,12 +1,22 @@
 package v.akfz.glaze.addictivelight.data.manager;
 
 import lombok.Getter;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import v.akfz.aslib.util.GlobalUtils;
+import v.akfz.glaze.addictivelight.data.SettingsData;
 import v.akfz.glaze.addictivelight.data.light.LightSource;
+import v.akfz.glaze.addictivelight.data.light.LightType;
 import v.akfz.glaze.addictivelight.data.light.SimpleLightSource;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -19,7 +29,7 @@ public class LightManager {
 
         public LightGroup() {
             allSources = Collections.synchronizedList(new ArrayList<>());
-            groups = new java.util.concurrent.ConcurrentHashMap<>();
+            groups = new ConcurrentHashMap<>();
         }
 
         public synchronized void add(String groupName, LightSource<?> source) {
@@ -105,6 +115,152 @@ public class LightManager {
             lightSource.setPrevY(lightSource.getY());
             lightSource.setPrevZ(lightSource.getZ());
         });
+    }
+
+    public void checkAndSetBlockLights() {
+        if (GlobalUtils.isClientSide()) {
+            ClientLightsHandler.run(this);
+        }
+    }
+
+    private static class ClientLightsHandler {
+        private static long lastUpdateTime = 0;
+        private static BlockPos lastPlayerPos = null;
+
+        private static void run(LightManager manager) {
+            try {
+                Minecraft mc = Minecraft.getInstance();
+                if (mc.level != null && mc.player != null) {
+                    long now = System.currentTimeMillis();
+                    BlockPos currentPos = mc.player.blockPosition();
+
+                    if (now - lastUpdateTime > 250 || lastPlayerPos == null || !currentPos.equals(lastPlayerPos)) {
+                        manager.updateBlockLights(mc.level, mc.player);
+                        lastUpdateTime = now;
+                        lastPlayerPos = currentPos;
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    private synchronized void updateBlockLights(Level level, Player player) {
+        SettingsData settings = DataManager.INSTANCE.getSettingsData();
+        Map<String, SettingsData.BlockLightSettings> customBlocks = settings.customLightBlocks;
+
+        if (customBlocks == null || customBlocks.isEmpty()) {
+            cleanBlockLights(null, level, Collections.emptyMap());
+            return;
+        }
+
+        int radiusXZ = settings.materialXZRadius;
+        int radiusY = settings.materialYRadius;
+
+        BlockPos playerPos = player.blockPosition();
+        Set<BlockPos> foundPositions = new HashSet<>();
+
+        int startX = playerPos.getX() - radiusXZ;
+        int endX = playerPos.getX() + radiusXZ;
+        int startY = Math.max(level.getMinBuildHeight(), playerPos.getY() - radiusY);
+        int endY = Math.min(level.getMaxBuildHeight(), playerPos.getY() + radiusY);
+        int startZ = playerPos.getZ() - radiusXZ;
+        int endZ = playerPos.getZ() + radiusXZ;
+
+        Set<BlockPos> alreadySpawned = new HashSet<>();
+        for (LightSource<?> light : storage.getGroup("CustomBlockLights")) {
+            alreadySpawned.add(BlockPos.containing(light.getX(), light.getY(), light.getZ()));
+        }
+
+        int minChunkX = startX >> 4;
+        int maxChunkX = endX >> 4;
+        int minChunkZ = startZ >> 4;
+        int maxChunkZ = endZ >> 4;
+
+        for (int chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+                net.minecraft.world.level.chunk.LevelChunk chunk = level.getChunkSource().getChunk(chunkX, chunkZ, false);
+                if (chunk == null) {
+                    continue;
+                }
+
+                int blockXStart = Math.max(startX, chunkX << 4);
+                int blockXEnd = Math.min(endX, (chunkX << 4) + 15);
+                int blockZStart = Math.max(startZ, chunkZ << 4);
+                int blockZEnd = Math.min(endZ, (chunkZ << 4) + 15);
+
+                for (int x = blockXStart; x <= blockXEnd; x++) {
+                    for (int z = blockZStart; z <= blockZEnd; z++) {
+                        for (int y = startY; y <= endY; y++) {
+                            BlockPos pos = new BlockPos(x, y, z);
+                            BlockState state = chunk.getBlockState(pos);
+                            if (state.isAir()) continue;
+
+                            String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+                            if (customBlocks.containsKey(blockId)) {
+                                foundPositions.add(pos.immutable());
+
+                                if (!alreadySpawned.contains(pos)) {
+                                    SettingsData.BlockLightSettings template = customBlocks.get(blockId);
+                                    if (template != null) {
+                                        SimpleLightSource newLight = new SimpleLightSource();
+                                        copyProperties(template, newLight);
+                                        newLight.position(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+                                        newLight.save(false);
+                                        storage.add("CustomBlockLights", newLight);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        cleanBlockLights(foundPositions, level, customBlocks);
+    }
+
+    private synchronized void cleanBlockLights(Set<BlockPos> validPositions, Level level, Map<String, SettingsData.BlockLightSettings> customBlocks) {
+        List<LightSource<?>> blockLights = storage.getGroup("CustomBlockLights");
+        for (LightSource<?> light : blockLights) {
+            BlockPos pos = BlockPos.containing(light.getX(), light.getY(), light.getZ());
+            boolean keep = false;
+            if (validPositions != null && validPositions.contains(pos)) {
+                BlockState state = level.getBlockState(pos);
+                String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+                if (customBlocks.containsKey(blockId)) {
+                    keep = true;
+                }
+            }
+            if (!keep) {
+                storage.remove(light);
+            }
+        }
+    }
+
+    private void copyProperties(SettingsData.BlockLightSettings from, SimpleLightSource to) {
+        to.active(true);
+        to.dynamic(true);
+        to.type(LightType.values()[from.type % LightType.values().length]);
+        to.color(new v.akfz.aslib.render.color.Color(from.r, from.g, from.b));
+        to.intensity(from.intensity);
+        to.linear(from.linear);
+        to.quadratic(from.quadratic);
+        to.radius(from.radius);
+        to.width(from.width);
+        to.height(from.height);
+        to.shadowSoftness(from.shadowSoftness);
+        to.shadowBias(from.shadowBias);
+        to.shadowsEnabled(from.shadowsEnabled);
+        to.ignoreBlocks(false);
+        to.volumetric(from.volumetric);
+        to.volumetricStrength(from.volumetricStrength);
+        to.mieG(from.mieG);
+        to.fogDensity(from.fogDensity);
+        to.fogAbsorption(from.fogAbsorption);
+        to.falloffExponent(from.falloffExponent);
+        to.sourceSize(from.sourceSize);
+        to.shadowNear(from.shadowNear);
+        to.shadowFar(from.shadowFar);
     }
 
     public synchronized List<LightSource<?>> getAllSources() {

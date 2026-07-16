@@ -7,6 +7,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import v.akfz.aslib.util.json.GsonHelper;
+import v.akfz.glaze.addictivelight.data.SettingsData;
+import v.akfz.glaze.addictivelight.data.manager.DataManager;
 
 import java.nio.file.Path;
 import java.util.Map;
@@ -34,7 +36,36 @@ public class MaterialManager {
         }
         Block block = state.getBlock();
         ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
-        return BLOCK_REGISTRY.getOrDefault(blockId, DEFAULT_BLOCK_MATERIAL);
+        if (blockId == null) {
+            return DEFAULT_BLOCK_MATERIAL;
+        }
+
+        BlockMaterial registered = BLOCK_REGISTRY.get(blockId);
+        if (registered != null) {
+            return registered;
+        }
+
+        String blockIdStr = blockId.toString();
+        SettingsData settings = DataManager.INSTANCE.getSettingsData();
+        if (settings != null && settings.customLightBlocks != null && settings.customLightBlocks.containsKey(blockIdStr)) {
+            SettingsData.BlockLightSettings config = settings.customLightBlocks.get(blockIdStr);
+            if (config != null) {
+                BlockMaterial customMat = new BlockMaterial()
+                        .emissive(1.0f)
+                        .roughness(0.5f)
+                        .metallic(0.0f)
+                        .castShadows(config.shadowsEnabled);
+
+                customMat.setTintR(config.r);
+                customMat.setTintG(config.g);
+                customMat.setTintB(config.b);
+
+                registerBlock(blockId, customMat);
+                return customMat;
+            }
+        }
+
+        return DEFAULT_BLOCK_MATERIAL;
     }
 
     public static EntityMaterial getEntityMaterial(Entity entity) {

@@ -73,12 +73,12 @@ void main() {
             float spatialWeight = weights[x + 2] * weights[y + 2];
 
             float depthDiff = abs(centerLinearDepth - sampleLinearDepth);
-            float depthWeight = exp(-depthDiff / (centerLinearDepth * uDepthThreshold + 1e-4));
+            float depthWeight = exp(-depthDiff / (uDepthThreshold * centerLinearDepth + 0.02));
 
-            float normalWeight = pow(max(0.0, dot(centerNormal, sampleNormal)), uNormalThreshold);
+            float normalWeight = exp(-max(0.0, 1.0 - dot(centerNormal, sampleNormal)) * uNormalThreshold);
 
             float lumaDiff = abs(centerLuma - sampleLuma);
-            float lumaWeight = exp(-lumaDiff / (uLumaThreshold * sqrt(variance) + 1e-4));
+            float lumaWeight = exp(-lumaDiff / (uLumaThreshold * sqrt(max(1e-4, variance)) + 0.02 * centerLuma + 0.005));
 
             float weight = spatialWeight * depthWeight * normalWeight * lumaWeight;
             sumLight += sampleLight * weight;
