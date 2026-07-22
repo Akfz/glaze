@@ -2,13 +2,13 @@ package v.akfz.glaze.addictivelight.gui.widget;
 
 import lombok.Getter;
 import lombok.Setter;
-import v.akfz.aslib.gui.widget.api.AbstractGroupWidget;
 import v.akfz.aslib.render.color.ColorUtils;
-import v.akfz.aslib.gui.widget.api.AbstractWidget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.lwjgl.glfw.GLFW;
+import v.akfz.aslib.render.gui.widget.api.AbstractGroupWidget;
+import v.akfz.aslib.render.gui.widget.api.AbstractWidget;
 
 public class ResizableScrollContainer extends AbstractGroupWidget {
     @Setter

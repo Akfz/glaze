@@ -1,7 +1,8 @@
 package v.akfz.glaze.addictivelight.gui.widget;
 
-import v.akfz.aslib.gui.widget.impl.button.ButtonWidget;
-import v.akfz.aslib.gui.widget.api.render.RenderPart;
+import v.akfz.aslib.render.gui.widget.api.render.RenderPart;
+import v.akfz.aslib.render.gui.widget.impl.button.ButtonWidget;
+
 import java.util.function.Consumer;
 
 public class OptionSelectorWidget extends ButtonWidget {

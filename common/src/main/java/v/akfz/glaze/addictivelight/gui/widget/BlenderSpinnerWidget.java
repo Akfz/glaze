@@ -4,8 +4,8 @@ import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import org.lwjgl.glfw.GLFW;
-import v.akfz.aslib.gui.widget.api.AbstractWidget;
-import v.akfz.aslib.gui.widget.impl.text.TextField;
+import v.akfz.aslib.render.gui.widget.api.AbstractWidget;
+import v.akfz.aslib.render.gui.widget.impl.text.TextField;
 
 import java.util.Locale;
 import java.util.function.Consumer;
