@@ -1,6 +1,5 @@
 package v.akfz.glaze.shader.impl;
 
-import lombok.Getter;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
@@ -20,9 +19,7 @@ import static org.lwjgl.opengl.GL20.*;
 
 public class ShaderProgram implements IShaderProgram {
     private int programId;
-    @Getter
     private final ResourceLocation vertexLocation;
-    @Getter
     private final ResourceLocation fragmentLocation;
     private final String directFragmentSource;
     private final Map<String, Integer> uniformLocationCache = new ConcurrentHashMap<>();
@@ -42,6 +39,14 @@ public class ShaderProgram implements IShaderProgram {
         this.fragmentLocation = null;
         this.directFragmentSource = fragmentSource;
         this.init();
+    }
+
+    public ResourceLocation getVertexLocation() {
+        return vertexLocation;
+    }
+
+    public ResourceLocation getFragmentLocation() {
+        return fragmentLocation;
     }
 
     private void init() {

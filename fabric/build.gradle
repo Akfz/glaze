@@ -1,7 +1,6 @@
 plugins {
-    id 'fabric-loom' version "${fabric_loom_version}"
+    id 'fabric-loom'
 }
-
 
 base {
     archivesName = "${project.archives_base_name}-fabric"
@@ -14,77 +13,52 @@ repositories {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
+
     mappings loom.layered() {
         officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-1.20.1:2023.09.03")
+        def pMc = project.findProperty('parchment_mc_version') ?: project.minecraft_version
+        def pVer = project.findProperty('parchment_version') ?: ''
+        if (pVer) {
+            parchment("org.parchmentmc.data:parchment-${pMc}:${pVer}@zip")
+        }
     }
+
     modImplementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
 
-    compileOnly "io.github.llamalad7:mixinextras-common:0.4.1"
-    annotationProcessor "io.github.llamalad7:mixinextras-common:0.4.1"
-    annotationProcessor project(':common')
-}
-
-evaluationDependsOn(':bridge')
-
-sourceSets {
-    main {
-        java {
-            srcDirs = [
-                    'src/main/java',
-                    project(':bridge').file('build/bridge/java')
-            ]
-        }
-        resources {
-            srcDirs = [
-                    'src/main/resources',
-                    project(':bridge').file('build/bridge/resources')
-            ]
-        }
-    }
-}
-
-tasks.named('compileJava', JavaCompile) {
-    dependsOn project(':bridge').tasks.named('copyCommon')
-}
-
-tasks.named('processResources', ProcessResources) {
-    dependsOn project(':bridge').tasks.named('copyCommon')
-}
-
-loom {
-    runs {
-        client {
-            client()
-            runDir "run"
-        }
-    }
-    mods {
-        "${project.mod_id}" {
-            sourceSet sourceSets.main
-        }
-    }
+    def mixinExtrasVer = project.findProperty('mixinextras_version') ?: '0.4.1'
+    compileOnly "io.github.llamalad7:mixinextras-common:${mixinExtrasVer}"
+    annotationProcessor "io.github.llamalad7:mixinextras-common:${mixinExtrasVer}"
+    annotationProcessor "org.spongepowered:mixin:${project.mixin_version}:processor"
 }
 
 tasks.named('processResources', ProcessResources).configure {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    exclude "META-INF/mods.toml"
-
-    var replaceProperties = [
-            minecraft_version: project.minecraft_version,
-            loader_version: project.fabric_loader_version,
-            version: project.mod_version
-    ]
-    inputs.properties replaceProperties
+    inputs.properties rootProject.ext.modProperties
 
     filesMatching('fabric.mod.json') {
-        expand replaceProperties + [project: project]
+        expand rootProject.ext.modProperties
     }
 }
 
 tasks.named('jar', Jar).configure {
+    archiveFileName.set("${project.archives_base_name}-${project.mod_version}-fabric-dev.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("libs"))
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from sourceSets.main.output
+}
+
+tasks.named('remapJar').configure {
+    archiveFileName.set("${project.archives_base_name}-${project.mod_version}-fabric.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("libs"))
+
+    from {
+        configurations.embed.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+
+    if (file("LICENSE").exists()) {
+        from("LICENSE") {
+            rename { "${it}_${project.base.archivesName.get()}" }
+        }
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {

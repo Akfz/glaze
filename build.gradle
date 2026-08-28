@@ -1,6 +1,3 @@
-import org.objectweb.asm.ClassReader
-import org.objectweb.asm.tree.ClassNode
-
 buildscript {
     repositories {
         mavenCentral()
@@ -11,12 +8,32 @@ buildscript {
     }
 }
 
+ext.modProperties = [
+        version: project.mod_version,
+        loader_version: project.fabric_loader_version,
+        minecraft_version: project.minecraft_version,
+        mod_id: project.mod_id,
+        mod_name: project.mod_name,
+        mod_description: project.mod_description,
+        mod_authors: project.mod_authors,
+        mod_license: project.mod_license,
+        mod_homepage: project.mod_homepage,
+        mod_issues: project.mod_issues,
+        mod_icon: project.mod_icon,
+        forge_version: project.findProperty('forge_version') ?: '',
+        neoforge_version: project.findProperty('neoforge_version') ?: ''
+]
+
 allprojects {
     apply plugin: 'java'
 
+    def javaVer = Integer.parseInt(project.findProperty('java_version') ?: '17')
     java {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.toVersion(javaVer)
+        targetCompatibility = JavaVersion.toVersion(javaVer)
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(javaVer)
+        }
     }
 
     version = project.mod_version
@@ -24,126 +41,98 @@ allprojects {
 }
 
 subprojects {
+    def javaVer = Integer.parseInt(project.findProperty('java_version') ?: '17')
+
+    tasks.withType(JavaCompile).configureEach {
+        it.options.encoding = 'UTF-8'
+        it.options.release = javaVer
+    }
+
     tasks.processResources {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
 
-    tasks.withType(JavaCompile).configureEach {
-        it.options.encoding = 'UTF-8'
-        it.options.release = 17
+    configurations {
+        embed
+        implementation.extendsFrom(embed)
     }
 
-    if (project.name != 'common' && project.name != 'bridge') {
-        configurations {
-            embed
-            implementation.extendsFrom(embed)
+    if (project.name != 'common') {
+        evaluationDependsOn(':common')
+        sourceSets.main.java.srcDirs += project(':common').sourceSets.main.java.srcDirs
+        sourceSets.main.resources.srcDirs += project(':common').sourceSets.main.resources.srcDirs
+    }
+
+    repositories {
+        if (project.hasProperty('aslib_version') && project.aslib_version) {
+            maven {
+                url = 'https://raw.githubusercontent.com/Akfz/AsLib/maven/'
+            }
+        }
+        if (project.hasProperty('dbuild_version') && project.dbuild_version) {
+            maven {
+                url = 'https://raw.githubusercontent.com/Akfz/DBuild/maven/'
+            }
         }
     }
 
-    afterEvaluate {
-        def finalJarName = "${rootProject.archives_base_name}-${project.name}-${project.version}.jar"
-
-        def aslibJar = fileTree(dir: 'libs', include: 'aslib-common-*.jar')
-        dependencies {
-            implementation aslibJar
-
-            compileOnly("org.projectlombok:lombok:1.18.38")
-            annotationProcessor("org.projectlombok:lombok:1.18.38")
+    dependencies {
+        if (project.hasProperty('aslib_version') && project.aslib_version) {
+            implementation "v.akfz:aslib-${project.name}:${project.aslib_version}"
+            annotationProcessor "v.akfz:aslib-${project.name}:${project.aslib_version}"
         }
-
-        if (project.name != 'common' && project.name != 'bridge') {
-            dependencies {
-                annotationProcessor aslibJar
-            }
-
-            if (project.name == 'fabric') {
-                tasks.named('remapJar') { task ->
-                    task.archiveFileName = finalJarName
-                    task.from {
-                        configurations.embed.collect { it.isDirectory() ? it : zipTree(it) }
-                    }
-
-                    if (file("LICENSE").exists()) {
-                        task.from("LICENSE") {
-                            rename { "${it}_${project.base.archivesName.get()}" }
-                        }
-                    }
-                }
-            } else {
-                tasks.named('jar', Jar) { Jar task ->
-                    task.duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-                    task.destinationDirectory.set(layout.buildDirectory.dir("libs"))
-                    task.archiveFileName = finalJarName
-
-                    task.from {
-                        configurations.embed.collect { it.isDirectory() ? it : zipTree(it) }
-                    }
-
-                    if (file("LICENSE").exists()) {
-                        task.from("LICENSE") {
-                            rename { "${it}_${project.base.archivesName.get()}" }
-                        }
-                    }
-                }
-            }
-
-            tasks.named('processResources', ProcessResources).configure {
-                duplicatesStrategy = DuplicatesStrategy.INCLUDE
-
-                if (project.name == 'forge') {
-                    exclude 'fabric.mod.json'
-                }
-
-                if (project.name == 'neoforge') {
-                    exclude 'fabric.mod.json'
-                    exclude 'quilt.mod.json'
-                }
-
-                if (project.name == 'fabric') {
-                    exclude 'META-INF/mods.toml'
-                    exclude 'pack.mcmeta'
-                }
-            }
-        } else {
-            tasks.named('jar', Jar) { Jar task ->
-                task.duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-                task.archiveFileName = finalJarName
-            }
+        if (project.hasProperty('dbuild_version') && project.dbuild_version) {
+            compileOnly "v.akfz:DBuild:${project.dbuild_version}"
+            annotationProcessor("v.akfz:DBuild:${project.dbuild_version}")
         }
     }
 
     tasks.withType(Jar).configureEach {
-        def targetAnnotation = "Lv/akfz/aslib/annotation/DontCompile;"
-
-        eachFile { fileCopyDetails ->
-            if (fileCopyDetails.name.endsWith('.class')) {
-                def file = fileCopyDetails.file
-
-                if (file.exists()) {
-                    def inputStream = file.newInputStream()
-                    try {
-                        def reader = new ClassReader(inputStream)
-                        def classNode = new ClassNode()
-                        reader.accept(classNode, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES)
-
-                        def hasAnnotation = classNode.invisibleAnnotations?.any { it.desc == targetAnnotation } ||
-                                classNode.visibleAnnotations?.any { it.desc == targetAnnotation }
-
-                        if (hasAnnotation) {
-                            fileCopyDetails.exclude()
+        def dontCompileClasses = provider {
+            def set = [] as Set
+            sourceSets.main.java.srcDirs.each { File srcDir ->
+                if (srcDir.exists()) {
+                    srcDir.eachFileRecurse { File file ->
+                        if (file.name.endsWith('.java') && file.text.contains('@DontCompile')) {
+                            String rel = srcDir.toPath().relativize(file.toPath()).toString().replace('\\', '/')
+                            set.add(rel.substring(0, rel.length() - 5))
                         }
-                    } catch (Exception e) {
-                    } finally {
-                        inputStream.close()
                     }
                 }
             }
+            return set
+        }
+
+        exclude { element ->
+            if (element.name.endsWith('.class')) {
+                String path = element.path.replace('\\', '/')
+                return dontCompileClasses.get().any { prefix -> path.startsWith(prefix + '.') || path.startsWith(prefix + '$') }
+            }
+            return false
+        }
+    }
+
+    tasks.named('processResources', ProcessResources).configure {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+        if (project.name == 'forge') {
+            exclude 'fabric.mod.json'
+            exclude 'quilt.mod.json'
+            exclude 'META-INF/neoforge.mods.toml'
+        }
+        if (project.name == 'neoforge') {
+            exclude 'fabric.mod.json'
+            exclude 'quilt.mod.json'
+            exclude 'META-INF/mods.toml'
+        }
+        if (project.name == 'fabric') {
+            exclude 'META-INF/mods.toml'
+            exclude 'META-INF/neoforge.mods.toml'
+            exclude 'pack.mcmeta'
         }
     }
 }
 
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 
@@ -152,107 +141,64 @@ abstract class ResourceCleanerService implements BuildService<BuildServiceParame
 
     @Override
     void close() {
-        println "[AsLib-Build] Clean libs start"
         filesToDelete.each { file ->
             if (file.exists()) {
                 try {
                     file.delete()
-                    println "[AsLib-Build] Deleted temporary file: ${file.name}"
-
                     if (file.parentFile.exists() && file.parentFile.list().length == 0) {
                         file.parentFile.delete()
                     }
-                } catch (Exception e) {
-                }
-            }
-        }
-        println "[AsLib-Build] Clean libs finished"
-    }
-}
-
-def cleanerProvider = gradle.sharedServices.registerIfAbsent("resourceCleaner", ResourceCleanerService) {}
-def cleaner = cleanerProvider.get()
-
-println "[AsLib-Build] Start copying libs"
-
-def libsDir = rootProject.file("libs")
-def fabricTargetDir = rootProject.file("fabric/run/mods")
-def forgeTargetDir = rootProject.file("forge/run/mods")
-
-if (libsDir.exists() && libsDir.isDirectory()) {
-    libsDir.listFiles().each { file ->
-        if (file.isFile() && file.name.endsWith(".jar")) {
-            def targetDir = null
-
-            if (file.name.contains("-fabric-")) {
-                targetDir = fabricTargetDir
-                println "[AsLib-Build] Copy fabric-jar: ${file.name}"
-            } else if (file.name.contains("-forge-")) {
-                targetDir = forgeTargetDir
-                println "[AsLib-Build] Copy forge-jar: ${file.name}"
-            }
-
-            if (targetDir != null) {
-                try {
-                    if (!targetDir.exists()) {
-                        targetDir.mkdirs()
-                    }
-                    def targetFile = new File(targetDir, file.name)
-                    Files.copy(file.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-
-                    cleaner.filesToDelete.add(targetFile)
-                } catch (Exception e) {
-                    println "[AsLib-Build] Error copying ${file.name}: ${e.message}"
-                }
+                } catch (Exception ignored) {}
             }
         }
     }
-} else {
-    println "[AsLib-Build] Warning: 'libs' directory not found!"
 }
 
-tasks.register('compileAll', Copy) {
+
+tasks.register('cleanLibs') {
     group = 'build'
-    description = 'Cleans all projects, then compiles and copies JARs from common, fabric, and forge to build/libs'
+    doLast {
+        delete rootProject.layout.buildDirectory.dir("libs")
+        subprojects.each { subproject ->
+            delete subproject.layout.buildDirectory.dir("libs")
+        }
+    }
+}
+
+tasks.register('compileAll') {
+    group = 'build'
+    description = 'Cleans and builds all active modules and aggregates output release & dev JARs'
+    dependsOn cleanLibs
 
     subprojects.each { subproject ->
-        if (subproject.name != 'bridge') {
-
-            def cleanTask = subproject.tasks.matching { it.name == 'clean' }
-
-            def buildTasks
-            if (subproject.name == 'fabric') {
-                buildTasks = subproject.tasks.matching { it.name == 'remapJar' }
-            } else if (subproject.name == 'forge') {
-                buildTasks = subproject.tasks.matching { it.name == 'jar' || it.name == 'devJar' }
-            } else {
-                buildTasks = subproject.tasks.matching { it.name == 'jar' }
-            }
-
-            dependsOn cleanTask
-            dependsOn buildTasks
-
-            buildTasks.configureEach { task ->
-                task.mustRunAfter(cleanTask)
-            }
+        if (subproject.name != 'common') {
+            dependsOn subproject.tasks.matching { it.name == 'build' || it.name == 'assemble' }
         }
     }
 
-    subprojects.each { subproject ->
-        if (subproject.name != 'bridge') {
-            if (subproject.name == 'common') {
-                from(subproject.layout.buildDirectory.dir("devlibs")) {
-                    include "*.jar"
-                }
-            } else {
-                from(subproject.layout.buildDirectory.dir("libs")) {
-                    include "*.jar"
+    doLast {
+        def modDir = layout.buildDirectory.dir("libs/mod").get().asFile
+        def devDir = layout.buildDirectory.dir("libs/dev").get().asFile
+
+        modDir.mkdirs()
+        devDir.mkdirs()
+
+        ['fabric', 'forge', 'neoforge'].each { platform ->
+            def subProj = findProject(":${platform}")
+            if (subProj != null) {
+                def buildLibs = subProj.layout.buildDirectory.dir("libs").get().asFile
+                if (buildLibs.exists()) {
+                    buildLibs.listFiles().each { jarFile ->
+                        if (jarFile.name.endsWith(".jar")) {
+                            if (jarFile.name.contains("-dev")) {
+                                copy { from jarFile; into devDir }
+                            } else {
+                                copy { from jarFile; into modDir }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
-
-    into(layout.buildDirectory.dir("libs"))
-
-    outputs.upToDateWhen { false }
 }

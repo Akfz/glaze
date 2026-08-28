@@ -3,25 +3,39 @@ loaderVersion="[47,)"
 license="MIT"
 
 [[mods]]
-modId="glze"
+modId="glz"
 version="1"
 displayName="Glaze"
 logoFile="icon.png"
 authors="Akaize"
+displayURL="https://github.com/Akfz/DBuild"
 description="""
 """
 
-[[dependencies.glze]]
+[[mixins]]
+config="glz.mixins.json"
+
+[[dependencies.glz]]
     modId="minecraft"
     mandatory=true
     versionRange="[1.20.1,1.21)"
     ordering="NONE"
     side="BOTH"
+    type="required"
 
-[[dependencies.glze]]
+[[dependencies.glz]]
     modId="forge"
     mandatory=true
     versionRange="[47,)"
     ordering="NONE"
     side="BOTH"
+    type="required"
+
+[[dependencies.glz]]
+    modId="aslib"
+    mandatory=true
+    versionRange=">=1"
+    ordering="NONE"
+    side="BOTH"
+    type="required"
 
