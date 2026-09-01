@@ -28,7 +28,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build and Publish to local folder
-        run: ./gradlew :lib-glaze:publish :common:publish -Ppublishing-dir=build/repo
+        run: ./gradlew publish -Ppublishing-dir=build/repo
 
       - name: Deploy Maven to branch
         uses: jamesives/github-pages-deploy-action@v4
