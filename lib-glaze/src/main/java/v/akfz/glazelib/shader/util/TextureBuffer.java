@@ -1,4 +1,4 @@
-package v.akfz.glaze.shader.util;
+package v.akfz.glazelib.shader.util;
 
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;

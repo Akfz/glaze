@@ -32,6 +32,7 @@ def isVersionAtLeast = { String current, String target ->
     return true
 }
 
+include 'lib-glaze'
 include 'common'
 include 'fabric'
 include 'forge'

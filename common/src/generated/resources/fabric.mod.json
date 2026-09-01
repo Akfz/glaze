@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "id": "glz",
-  "version": "1",
-  "name": "Glaze",
+  "version": "1.0-SNAPSHOT",
+  "name": "Glaze + GlazeLib",
   "description": "Mod created with ASLib",
   "license": "MIT",
-  "icon": "assets/glz/icon.png",
+  "icon": "assets/glze/icon.png",
   "environment": "*",
   "authors": [
     "Akaize"
@@ -19,7 +19,7 @@
     ]
   },
   "mixins": [
-    "glz.mixins.json"
+    "glaze.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.15.11",

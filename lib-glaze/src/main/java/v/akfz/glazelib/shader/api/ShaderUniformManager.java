@@ -1,15 +1,20 @@
-package v.akfz.glaze.shader.api;
+package v.akfz.glazelib.shader.api;
 
 import org.joml.*;
+import org.lwjgl.opengl.GL12;
+import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL42;
+import org.lwjgl.opengl.GL43;
 import org.lwjgl.system.MemoryStack;
-import v.akfz.glaze.shader.util.UniformBuffer;
+import v.akfz.glazelib.shader.util.ShaderStorageBuffer;
+import v.akfz.glazelib.shader.util.UniformBuffer;
+import v.akfz.glazelib.util.gl.GLPossibilities;
 
 import java.nio.FloatBuffer;
 import java.util.Map;
 
 import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
-import static org.lwjgl.opengl.GL13.glActiveTexture;
+import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL31.*;
 
@@ -23,14 +28,6 @@ public final class ShaderUniformManager {
     private int prepare(String name) {
         program.checkActive();
         return program.getUniformLocation(name);
-    }
-
-    public void bindUbo(String blockName, UniformBuffer ubo) {
-        program.checkActive();
-        int blockIndex = glGetUniformBlockIndex(program.getProgramID(), blockName);
-        if (blockIndex != -1) {
-            glUniformBlockBinding(program.getProgramID(), blockIndex, ubo.getBindingPoint());
-        }
     }
 
     public void set(String name, boolean value) {
@@ -119,6 +116,18 @@ public final class ShaderUniformManager {
         glActiveTexture(GL_TEXTURE0);
     }
 
+    public void setMultiple(Map<String, UniformValue> uniforms) {
+        uniforms.forEach((name, value) -> value.apply(this, name));
+    }
+
+    public void bindUbo(String blockName, UniformBuffer ubo) {
+        program.checkActive();
+        int blockIndex = glGetUniformBlockIndex(program.getProgramID(), blockName);
+        if (blockIndex != -1) {
+            glUniformBlockBinding(program.getProgramID(), blockIndex, ubo.getBindingPoint());
+        }
+    }
+
     public void bindUniformBlock(int bindingPoint, String blockName) {
         program.checkActive();
         int blockIndex = glGetUniformBlockIndex(program.getProgramID(), blockName);
@@ -127,8 +136,71 @@ public final class ShaderUniformManager {
         }
     }
 
-    public void setMultiple(Map<String, UniformValue> uniforms) {
-        uniforms.forEach((name, value) -> value.apply(this, name));
+    public void bindSSBO(String blockName, ShaderStorageBuffer ssbo) {
+        if (!GLPossibilities.supportsSSBO()) {
+            throw new UnsupportedOperationException("SSBO is not supported on this GPU.");
+        }
+        program.checkActive();
+        int blockIndex = GL43.glGetProgramResourceIndex(
+                program.getProgramID(),
+                GL43.GL_SHADER_STORAGE_BLOCK,
+                blockName
+        );
+        if (blockIndex != -1) {
+            GL43.glShaderStorageBlockBinding(
+                    program.getProgramID(),
+                    blockIndex,
+                    ssbo.getBindingPoint()
+            );
+        }
+    }
+
+    public void bindSSBO(int bindingPoint, ShaderStorageBuffer ssbo) {
+        if (!GLPossibilities.supportsSSBO()) {
+            throw new UnsupportedOperationException("SSBO is not supported on this GPU.");
+        }
+        GL30.glBindBufferBase(GL43.GL_SHADER_STORAGE_BUFFER, bindingPoint, ssbo.getSsboId());
+    }
+
+    public void bindSSBORange(int bindingPoint, ShaderStorageBuffer ssbo, int offset, int size) {
+        if (!GLPossibilities.supportsSSBO()) {
+            throw new UnsupportedOperationException("SSBO is not supported on this GPU.");
+        }
+        GL30.glBindBufferRange(
+                GL43.GL_SHADER_STORAGE_BUFFER,
+                bindingPoint,
+                ssbo.getSsboId(),
+                offset,
+                size
+        );
+    }
+
+    public void bindImageTexture(int unit, int textureId, int level, boolean layered,
+                                 int layer, int access, int internalFormat) {
+        if (!GLPossibilities.supportsImageLoadStore()) {
+            throw new UnsupportedOperationException("Image Load/Store not supported on this GPU.");
+        }
+        program.checkActive();
+        GL42.glBindImageTexture(unit, textureId, level, layered, layer, access, internalFormat);
+    }
+
+    public void bindImageRead(int unit, int textureId, int internalFormat) {
+        bindImageTexture(unit, textureId, 0, false, 0, GL_READ_ONLY, internalFormat);
+    }
+
+    public void bindImageWrite(int unit, int textureId, int internalFormat) {
+        bindImageTexture(unit, textureId, 0, false, 0, GL_WRITE_ONLY, internalFormat);
+    }
+
+    public void bindImageReadWrite(int unit, int textureId, int internalFormat) {
+        bindImageTexture(unit, textureId, 0, false, 0, GL_READ_WRITE, internalFormat);
+    }
+
+    public void setTexture3D(String name, int textureUnit, int textureId) {
+        glActiveTexture(GL_TEXTURE0 + textureUnit);
+        glBindTexture(GL12.GL_TEXTURE_3D, textureId);
+        set(name, textureUnit);
+        glActiveTexture(GL_TEXTURE0);
     }
 
     @FunctionalInterface

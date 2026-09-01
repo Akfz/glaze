@@ -4,13 +4,13 @@ license="MIT"
 
 [[mods]]
 modId="glz"
-version="1"
-displayName="Glaze"
+version="1.0-SNAPSHOT"
+displayName="Glaze + GlazeLib"
 logoFile="icon.png"
 authors="Akaize"
 displayURL="https://github.com/Akfz/DBuild"
 description="""
-"""
+look, now anything is different!"""
 
 [[mixins]]
 config="glz.mixins.json"

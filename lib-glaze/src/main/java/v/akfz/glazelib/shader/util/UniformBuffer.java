@@ -1,4 +1,4 @@
-package v.akfz.glaze.shader.util;
+package v.akfz.glazelib.shader.util;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import org.lwjgl.opengl.GL15;

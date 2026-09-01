@@ -14,10 +14,10 @@ import v.akfz.glaze.impl.post.PostProcessRenderer;
 public class GameRendererMixin {
 	@Shadow @Final Minecraft minecraft;
 
-	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphics;flush()V"))
+	@Inject(method = "render(FJZ)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphics;flush()V"))
 	public void glaze$onPostProcessRenderer(float pPartialTicks,long pNanoTime,boolean pRenderLevel,CallbackInfo ci) {
 		PostProcessRenderer postProcessRenderer = PostProcessRenderer.INSTANCE;
-		if (!postProcessRenderer.renderGlobal) {
+		if (postProcessRenderer.renderGlobal) {
 			postProcessRenderer.render(minecraft.getMainRenderTarget());
 		}
 	}

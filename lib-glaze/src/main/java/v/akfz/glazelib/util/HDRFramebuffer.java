@@ -1,4 +1,4 @@
-package v.akfz.glaze.shader.util;
+package v.akfz.glazelib.util;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.GlStateManager;

@@ -1,10 +1,10 @@
-package v.akfz.glaze.shader.impl;
+package v.akfz.glazelib.shader.impl;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
-import v.akfz.glaze.shader.api.IShaderProgram;
-import v.akfz.glaze.shader.api.ShaderUniformManager;
+import v.akfz.glazelib.shader.api.IShaderProgram;
+import v.akfz.glazelib.shader.api.ShaderUniformManager;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,7 +23,6 @@ public class ShaderProgram implements IShaderProgram {
     private final ResourceLocation fragmentLocation;
     private final String directFragmentSource;
     private final Map<String, Integer> uniformLocationCache = new ConcurrentHashMap<>();
-
     public ShaderUniformManager uniformManager;
     private boolean isInUse = false;
 
@@ -41,19 +40,11 @@ public class ShaderProgram implements IShaderProgram {
         this.init();
     }
 
-    public ResourceLocation getVertexLocation() {
-        return vertexLocation;
-    }
-
-    public ResourceLocation getFragmentLocation() {
-        return fragmentLocation;
-    }
+    public ResourceLocation getVertexLocation() { return vertexLocation; }
+    public ResourceLocation getFragmentLocation() { return fragmentLocation; }
 
     private void init() {
-        if (this.programId > 0) {
-            this.cleanup();
-        }
-
+        if (this.programId > 0) this.cleanup();
         this.programId = glCreateProgram();
         List<Integer> compiledShaders = new ArrayList<>();
 
@@ -62,18 +53,15 @@ public class ShaderProgram implements IShaderProgram {
             glAttachShader(this.programId, vertexId);
             compiledShaders.add(vertexId);
 
-            int fragmentId;
-            if (this.directFragmentSource != null) {
-                fragmentId = this.createShaderFromSource(this.directFragmentSource, GL_FRAGMENT_SHADER, "DynamicFragmentShader");
-            } else {
-                fragmentId = this.createShader(this.fragmentLocation, GL_FRAGMENT_SHADER);
-            }
+            int fragmentId = (this.directFragmentSource != null)
+                    ? this.createShaderFromSource(this.directFragmentSource, GL_FRAGMENT_SHADER, "DynamicFragmentShader")
+                    : this.createShader(this.fragmentLocation, GL_FRAGMENT_SHADER);
+
             glAttachShader(this.programId, fragmentId);
             compiledShaders.add(fragmentId);
 
             glBindAttribLocation(this.programId, 0, "aPos");
             glBindAttribLocation(this.programId, 1, "aTexCoord");
-
             glLinkProgram(this.programId);
             this.checkProgramLinkStatus(this.programId);
 
@@ -83,10 +71,8 @@ public class ShaderProgram implements IShaderProgram {
             }
 
             this.uniformManager = new ShaderUniformManager(this);
-
             glValidateProgram(this.programId);
             this.checkProgramValidateStatus(this.programId);
-
         } catch (Exception e) {
             for (int shaderId : compiledShaders) {
                 if (shaderId != 0) glDeleteShader(shaderId);
@@ -96,8 +82,7 @@ public class ShaderProgram implements IShaderProgram {
     }
 
     private int createShader(ResourceLocation location, int type) {
-        String source = this.loadShaderSource(location);
-        return this.createShaderFromSource(source, type, location.toString());
+        return this.createShaderFromSource(this.loadShaderSource(location), type, location.toString());
     }
 
     private int createShaderFromSource(String source, int type, String name) {
@@ -108,6 +93,7 @@ public class ShaderProgram implements IShaderProgram {
         if (glGetShaderi(shaderId, GL_COMPILE_STATUS) == GL_FALSE) {
             String log = glGetShaderInfoLog(shaderId);
             String typeName = type == GL_VERTEX_SHADER ? "Vertex" : "Fragment";
+            glDeleteShader(shaderId);
             throw new RuntimeException("Compile error in " + typeName + " shader (" + name + "):\n" + log);
         }
         return shaderId;
@@ -115,14 +101,8 @@ public class ShaderProgram implements IShaderProgram {
 
     private String loadShaderSource(ResourceLocation location) {
         try {
-            Optional<Resource> resourceOptional = Minecraft.getInstance()
-                    .getResourceManager()
-                    .getResource(location);
-
-            if (resourceOptional.isEmpty()) {
-                throw new IOException("Shader resource assets not found: " + location);
-            }
-
+            Optional<Resource> resourceOptional = Minecraft.getInstance().getResourceManager().getResource(location);
+            if (resourceOptional.isEmpty()) throw new IOException("Shader resource assets not found: " + location);
             try (InputStream stream = resourceOptional.get().open()) {
                 return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
             }
@@ -131,29 +111,15 @@ public class ShaderProgram implements IShaderProgram {
         }
     }
 
-    public void reload() {
-        this.cleanup();
-        this.init();
-    }
-
-    public void use() {
-        glUseProgram(this.programId);
-        this.isInUse = true;
-    }
+    public void reload() { this.cleanup(); this.init(); }
+    public void use() { glUseProgram(this.programId); this.isInUse = true; }
 
     public void use(Runnable action) {
         this.use();
-        try {
-            action.run();
-        } finally {
-            this.stop();
-        }
+        try { action.run(); } finally { this.stop(); }
     }
 
-    public void stop() {
-        glUseProgram(0);
-        this.isInUse = false;
-    }
+    public void stop() { glUseProgram(0); this.isInUse = false; }
 
     public void cleanup() {
         if (this.programId != 0) {
@@ -167,16 +133,30 @@ public class ShaderProgram implements IShaderProgram {
     @Override
     public int getUniformLocation(String name) {
         if (this.programId <= 0) return -1;
-
         return this.uniformLocationCache.computeIfAbsent(name, key -> glGetUniformLocation(this.programId, key));
     }
 
     @Override
     public void checkActive() {
-        if (!this.isInUse) {
-            throw new IllegalStateException("Shader program '" + this.getProgramName() + "' is not active!");
-        }
+        if (!this.isInUse) throw new IllegalStateException("Shader program '" + this.getProgramName() + "' is not active!");
     }
+
+    @Override
+    public ShaderUniformManager getUniformManager() { return this.uniformManager; }
+
+    @Override
+    public int getProgramID() { return this.programId; }
+
+    @Override
+    public String getProgramName() {
+        if (this.vertexLocation == null) return "Unknown";
+        String path = this.vertexLocation.getPath();
+        int lastSlash = path.lastIndexOf('/');
+        return lastSlash != -1 ? path.substring(lastSlash + 1) : path;
+    }
+
+    @Override
+    public boolean isValid() { return this.programId > 0 && glIsProgram(this.programId); }
 
     private void checkProgramLinkStatus(int id) {
         if (glGetProgrami(id, GL_LINK_STATUS) == GL_FALSE) {
@@ -188,22 +168,5 @@ public class ShaderProgram implements IShaderProgram {
         if (glGetProgrami(id, GL_VALIDATE_STATUS) == GL_FALSE) {
             System.err.println("Shader program validation warning: " + glGetProgramInfoLog(id));
         }
-    }
-
-    @Override
-    public int getProgramID() {
-        return this.programId;
-    }
-
-    @Override
-    public String getProgramName() {
-        if (this.vertexLocation == null) return "Unknown";
-        String path = this.vertexLocation.getPath();
-        int lastSlash = path.lastIndexOf('/');
-        return lastSlash != -1 ? path.substring(lastSlash + 1) : path;
-    }
-
-    public boolean isValid() {
-        return this.programId > 0 && glIsProgram(this.programId);
     }
 }

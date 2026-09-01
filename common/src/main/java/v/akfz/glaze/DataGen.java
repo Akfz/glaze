@@ -12,7 +12,6 @@ import v.akfz.db.annotation.DontCompile;
 public class DataGen {
 	public static void main(String[] args) {
 		new GenerateFabricModJson(new FabricModJsonData()
-				.mixin("glz.mixins.json")
 				.entrypoint("v.akfz.glaze.Glaze_fabric")
 				.depend("aslib", ">=1")
 				.description(""))
