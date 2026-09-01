@@ -1,0 +1,83 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "v.akfz",
+    "module": "forge",
+    "version": "1.0-SNAPSHOT",
+    "attributes": {
+      "org.gradle.status": "integration"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.14.4"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "forge-1.0-SNAPSHOT.jar",
+          "url": "forge-1.0-SNAPSHOT.jar",
+          "size": 256147,
+          "sha512": "ce1c838bcc84879e55fda073f3ceb925873f9287b4132ebf34e6a88bdfda11e66ae8d66bca6ee69df0d5953e17de89d2732ad7c87409e1fb96813156d161f9b3",
+          "sha256": "dac6b0c85c2a3be5d552b35ac52e181920f37a35e5b3aa542433e97b8775a355",
+          "sha1": "1e26db47487124172929c42759d5bbe15f53ea5d",
+          "md5": "e519fdbd0f809ede706e5c0968a65422"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 17,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "v.akfz",
+          "module": "aslib-forge",
+          "version": {
+            "requires": "Dev_1.20.1-SNAPSHOT"
+          }
+        },
+        {
+          "group": "io.github.llamalad7",
+          "module": "mixinextras-common",
+          "version": {
+            "requires": "0.4.1"
+          }
+        },
+        {
+          "group": "net.minecraftforge",
+          "module": "forge",
+          "version": {
+            "requires": "1.20.1-47.4.20_mapped_parchment_2023.09.03-1.20.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "forge-1.0-SNAPSHOT.jar",
+          "url": "forge-1.0-SNAPSHOT.jar",
+          "size": 256147,
+          "sha512": "ce1c838bcc84879e55fda073f3ceb925873f9287b4132ebf34e6a88bdfda11e66ae8d66bca6ee69df0d5953e17de89d2732ad7c87409e1fb96813156d161f9b3",
+          "sha256": "dac6b0c85c2a3be5d552b35ac52e181920f37a35e5b3aa542433e97b8775a355",
+          "sha1": "1e26db47487124172929c42759d5bbe15f53ea5d",
+          "md5": "e519fdbd0f809ede706e5c0968a65422"
+        }
+      ]
+    }
+  ]
+}
