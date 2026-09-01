@@ -8,24 +8,9 @@ buildscript {
     }
 }
 
-ext.modProperties = [
-        version: project.mod_version,
-        loader_version: project.fabric_loader_version,
-        minecraft_version: project.minecraft_version,
-        mod_id: project.mod_id,
-        mod_name: project.mod_name,
-        mod_description: project.mod_description,
-        mod_authors: project.mod_authors,
-        mod_license: project.mod_license,
-        mod_homepage: project.mod_homepage,
-        mod_issues: project.mod_issues,
-        mod_icon: project.mod_icon,
-        forge_version: project.findProperty('forge_version') ?: '',
-        neoforge_version: project.findProperty('neoforge_version') ?: ''
-]
-
 allprojects {
     apply plugin: 'java'
+    apply plugin: 'maven-publish'
 
     def javaVer = Integer.parseInt(project.findProperty('java_version') ?: '17')
     java {
@@ -44,12 +29,20 @@ subprojects {
     def javaVer = Integer.parseInt(project.findProperty('java_version') ?: '17')
 
     tasks.withType(JavaCompile).configureEach {
-        it.options.encoding = 'UTF-8'
-        it.options.release = javaVer
+        options.encoding = 'UTF-8'
+        options.release = javaVer
     }
 
-    tasks.processResources {
+    tasks.named('processResources', ProcessResources).configure {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
+
+        if (project.name == 'forge') {
+            exclude 'fabric.mod.json', 'quilt.mod.json', 'META-INF/neoforge.mods.toml'
+        } else if (project.name == 'neoforge') {
+            exclude 'fabric.mod.json', 'quilt.mod.json', 'META-INF/mods.toml'
+        } else if (project.name == 'fabric') {
+            exclude 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml', 'pack.mcmeta'
+        }
     }
 
     configurations {
@@ -57,146 +50,163 @@ subprojects {
         implementation.extendsFrom(embed)
     }
 
-    if (project.name != 'common') {
+    if (project.name == 'common') {
+        evaluationDependsOn(':lib-glaze')
+        def libProject = project(':lib-glaze')
+        sourceSets.main.java.srcDirs = [libProject.sourceSets.main.java.srcDirs, sourceSets.main.java.srcDirs].flatten()
+    }
+
+    if (project.name != 'common' && project.name != 'lib-glaze') {
         evaluationDependsOn(':common')
-        sourceSets.main.java.srcDirs += project(':common').sourceSets.main.java.srcDirs
-        sourceSets.main.resources.srcDirs += project(':common').sourceSets.main.resources.srcDirs
+
+        def commonProject = project(':common')
+        sourceSets.main.java.srcDirs = [commonProject.sourceSets.main.java.srcDirs, sourceSets.main.java.srcDirs].flatten()
+        sourceSets.main.resources.srcDirs = [commonProject.sourceSets.main.resources.srcDirs, sourceSets.main.resources.srcDirs].flatten()
+/*
+        def libProject = project(':lib-glaze')
+        sourceSets.main.java.srcDirs = [libProject.sourceSets.main.java.srcDirs, sourceSets.main.java.srcDirs].flatten()
+        sourceSets.main.resources.srcDirs = [libProject.sourceSets.main.resources.srcDirs, sourceSets.main.resources.srcDirs].flatten()
+ */
     }
 
     repositories {
         if (project.hasProperty('aslib_version') && project.aslib_version) {
-            maven {
-                url = 'https://raw.githubusercontent.com/Akfz/AsLib/maven/'
-            }
+            maven { url = 'https://raw.githubusercontent.com/Akfz/AsLib/maven/' }
         }
         if (project.hasProperty('dbuild_version') && project.dbuild_version) {
-            maven {
-                url = 'https://raw.githubusercontent.com/Akfz/DBuild/maven/'
-            }
+            maven { url = 'https://raw.githubusercontent.com/Akfz/DBuild/maven/' }
         }
     }
 
     dependencies {
         if (project.hasProperty('aslib_version') && project.aslib_version) {
-            implementation "v.akfz:aslib-${project.name}:${project.aslib_version}"
-            annotationProcessor "v.akfz:aslib-${project.name}:${project.aslib_version}"
+            def aslibDep = "v.akfz:aslib-${project.name}:${project.aslib_version}"
+            if (project.name == 'lib-glaze') aslibDep = "v.akfz:aslib-common:${project.aslib_version}"
+            implementation aslibDep
+            annotationProcessor aslibDep
         }
         if (project.hasProperty('dbuild_version') && project.dbuild_version) {
-            compileOnly "v.akfz:DBuild:${project.dbuild_version}"
-            annotationProcessor("v.akfz:DBuild:${project.dbuild_version}")
+            def dbuildDep = "v.akfz:DBuild:${project.dbuild_version}"
+            compileOnly dbuildDep
+            annotationProcessor dbuildDep
         }
     }
 
     tasks.withType(Jar).configureEach {
+        if (project.name != 'lib-glaze') {
+            dependsOn project(':lib-glaze').tasks.named('jar')
+        }
         def dontCompileClasses = provider {
-            def set = [] as Set
+            def excludedPrefixes = [] as Set
+
             sourceSets.main.java.srcDirs.each { File srcDir ->
                 if (srcDir.exists()) {
                     srcDir.eachFileRecurse { File file ->
-                        if (file.name.endsWith('.java') && file.text.contains('@DontCompile')) {
-                            String rel = srcDir.toPath().relativize(file.toPath()).toString().replace('\\', '/')
-                            set.add(rel.substring(0, rel.length() - 5))
+                        if (file.name.endsWith('.java')) {
+                            boolean found = false
+                            file.eachLine('UTF-8') { line ->
+                                if (line =~ /\b@DontCompile\b/) {
+                                    found = true
+                                    return false
+                                }
+                            }
+
+                            if (found) {
+                                String rel = srcDir.toPath().relativize(file.toPath()).toString().replace('\\', '/')
+                                excludedPrefixes.add(rel.substring(0, rel.length() - 5))
+                            }
                         }
                     }
                 }
             }
-            return set
+            return excludedPrefixes
         }
 
         exclude { element ->
             if (element.name.endsWith('.class')) {
                 String path = element.path.replace('\\', '/')
-                return dontCompileClasses.get().any { prefix -> path.startsWith(prefix + '.') || path.startsWith(prefix + '$') }
+                return dontCompileClasses.get().any { prefix ->
+                    path.startsWith(prefix + '.') || path.startsWith(prefix + '$') || path == (prefix + '.class')
+                }
             }
             return false
         }
     }
 
-    tasks.named('processResources', ProcessResources).configure {
-        duplicatesStrategy = DuplicatesStrategy.INCLUDE
-
-        if (project.name == 'forge') {
-            exclude 'fabric.mod.json'
-            exclude 'quilt.mod.json'
-            exclude 'META-INF/neoforge.mods.toml'
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                artifactId = project.base.archivesName.get()
+                from components.java
+            }
         }
-        if (project.name == 'neoforge') {
-            exclude 'fabric.mod.json'
-            exclude 'quilt.mod.json'
-            exclude 'META-INF/mods.toml'
-        }
-        if (project.name == 'fabric') {
-            exclude 'META-INF/mods.toml'
-            exclude 'META-INF/neoforge.mods.toml'
-            exclude 'pack.mcmeta'
-        }
-    }
-}
+        repositories {
+            maven {
+                name = "TargetMaven"
+                def pubDir = project.findProperty('publishing-dir')
+                if (pubDir) {
+                    url = uri(rootProject.file(pubDir))
+                } else {
+                    url = uri(rootProject.layout.buildDirectory.dir("repo"))
+                }
 
-import org.gradle.api.services.BuildService
-import org.gradle.api.services.BuildServiceParameters
-
-abstract class ResourceCleanerService implements BuildService<BuildServiceParameters.None>, AutoCloseable {
-    final List<File> filesToDelete = Collections.synchronizedList(new ArrayList<File>())
-
-    @Override
-    void close() {
-        filesToDelete.each { file ->
-            if (file.exists()) {
-                try {
-                    file.delete()
-                    if (file.parentFile.exists() && file.parentFile.list().length == 0) {
-                        file.parentFile.delete()
+                if (project.hasProperty('publishing_username') && project.hasProperty('publishing_password')) {
+                    credentials {
+                        username = project.findProperty('publishing_username')
+                        password = project.findProperty('publishing_password')
                     }
-                } catch (Exception ignored) {}
+                }
             }
         }
     }
 }
 
-
 tasks.register('cleanLibs') {
     group = 'build'
+    description = 'Cleans only the libs directories of root and subprojects'
     doLast {
         delete rootProject.layout.buildDirectory.dir("libs")
-        subprojects.each { subproject ->
-            delete subproject.layout.buildDirectory.dir("libs")
-        }
+        subprojects.each { delete it.layout.buildDirectory.dir("libs") }
     }
 }
 
 tasks.register('compileAll') {
     group = 'build'
-    description = 'Cleans and builds all active modules and aggregates output release & dev JARs'
-    dependsOn cleanLibs
+    description = 'Cleans libs and builds all active modules, aggregating output release & dev JARs'
+    dependsOn 'cleanLibs'
 
-    subprojects.each { subproject ->
-        if (subproject.name != 'common') {
-            dependsOn subproject.tasks.matching { it.name == 'build' || it.name == 'assemble' }
-        }
+    def loaderProjects = subprojects.findAll { it.name in ['fabric', 'forge', 'neoforge'] }
+    dependsOn loaderProjects.collect { it.tasks.named('assemble') }
+
+    dependsOn loaderProjects.findAll { it.name in ['forge', 'neoforge'] }.collect { it.tasks.named('devJar') }
+
+    def libProj = findProject(':lib-glaze')
+    if (libProj != null) {
+        dependsOn libProj.tasks.named('jar')
+    }
+    def commonProj = findProject(':common')
+    if (commonProj != null) {
+        dependsOn commonProj.tasks.named('jar')
     }
 
     doLast {
         def modDir = layout.buildDirectory.dir("libs/mod").get().asFile
         def devDir = layout.buildDirectory.dir("libs/dev").get().asFile
-
         modDir.mkdirs()
         devDir.mkdirs()
 
-        ['fabric', 'forge', 'neoforge'].each { platform ->
+        ['common', 'fabric', 'forge', 'neoforge'].each { platform ->
             def subProj = findProject(":${platform}")
-            if (subProj != null) {
-                def buildLibs = subProj.layout.buildDirectory.dir("libs").get().asFile
-                if (buildLibs.exists()) {
-                    buildLibs.listFiles().each { jarFile ->
-                        if (jarFile.name.endsWith(".jar")) {
-                            if (jarFile.name.contains("-dev")) {
-                                copy { from jarFile; into devDir }
-                            } else {
-                                copy { from jarFile; into modDir }
-                            }
-                        }
-                    }
+            if (subProj == null) return
+            def buildLibs = subProj.layout.buildDirectory.dir("libs").get().asFile
+            if (!buildLibs.exists()) return
+
+            buildLibs.listFiles()?.each { jarFile ->
+                if (!jarFile.name.endsWith(".jar")) return
+                def targetDir = jarFile.name.contains("-dev") ? devDir : modDir
+                copy {
+                    from jarFile
+                    into targetDir
                 }
             }
         }

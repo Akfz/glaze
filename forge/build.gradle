@@ -11,6 +11,7 @@ base {
 repositories {
     mavenCentral()
     maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    maven { url = 'https://maven.minecraftforge.net/' }
 }
 
 minecraft {
@@ -18,12 +19,9 @@ minecraft {
     def pMc = project.findProperty('parchment_mc_version') ?: project.minecraft_version
     mappings channel: 'parchment', version: "${pVer}-${pMc}"
 
-    copyIdeResources = true
-
     runs {
         configureEach {
             workingDirectory project.file('run')
-
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
             property 'forge.earlydisplay.enable', 'false'
@@ -35,55 +33,56 @@ minecraft {
             }
         }
 
+        def mixinConfigName = project.findProperty('mixin_name') ?: project.mod_id
         client {
-            property 'mixin.config', "${project.mod_id}.mixins.json"
+            property 'mixin.config', "${mixinConfigName}.json"
         }
 
         server {
-            property 'mixin.config', "${project.mod_id}.mixins.json"
+            property 'mixin.config', "${mixinConfigName}.json"
         }
     }
 }
 
 dependencies {
     minecraft "net.minecraftforge:forge:${project.forge_version}"
+
     annotationProcessor "org.spongepowered:mixin:${project.mixin_version}:processor"
 
     def mixinExtrasVer = project.findProperty('mixinextras_version') ?: '0.4.1'
-    compileOnly "io.github.llamalad7:mixinextras-common:${mixinExtrasVer}"
+
+    embed "io.github.llamalad7:mixinextras-common:${mixinExtrasVer}"
     annotationProcessor "io.github.llamalad7:mixinextras-common:${mixinExtrasVer}"
 }
 
 mixin {
-    add sourceSets.main, "${project.mod_id}.refmap.json"
-    config "${project.mod_id}.mixins.json"
+    def mixinConfigName = project.findProperty('mixin_name') ?: project.mod_id
+    add sourceSets.main, "${mixinConfigName}.refmap.json"
+    config "${mixinConfigName}.json"
 }
 
 tasks.named('processResources', ProcessResources).configure {
-    inputs.properties rootProject.ext.modProperties
+    def props = rootProject.ext.find('modProperties') ?: [:]
+    inputs.properties props
 
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand rootProject.ext.modProperties
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta', '**/*.json']) {
+        expand props
     }
-}
 
-tasks.named('compileJava', JavaCompile) {
-    options.compilerArgs << "-AoutRefMapFile=${projectDir}/build/resources/main/${project.mod_id}.refmap.json"
-    options.compilerArgs << "-AoutMapFileWithMappings=true"
+    duplicatesStrategy = DuplicatesStrategy.WARN
 }
 
 tasks.named('jar', Jar).configure {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from sourceSets.main.output
+    archiveFileName.set("${project.archives_base_name}-${project.mod_version}-forge.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("libs"))
+    duplicatesStrategy = DuplicatesStrategy.WARN
 
     from {
         configurations.embed.collect { it.isDirectory() ? it : zipTree(it) }
     }
 
-    destinationDirectory.set(layout.buildDirectory.dir("libs"))
-    archiveFileName.set("${project.archives_base_name}-${project.mod_version}-forge.jar")
-
     manifest {
+        def mixinConfigName = project.findProperty('mixin_name') ?: project.mod_id
         attributes([
                 "Specification-Title"     : project.mod_id,
                 "Specification-Vendor"    : project.maven_group,
@@ -92,23 +91,24 @@ tasks.named('jar', Jar).configure {
                 "Implementation-Version"  : project.mod_version,
                 "Implementation-Vendor"   : project.maven_group,
                 "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                "MixinConfigs"            : "${project.mod_id}.mixins.json"
+                "MixinConfigs"            : "${mixinConfigName}.json"
         ])
     }
 }
 
 tasks.register('devJar', Jar) {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    archiveFileName.set("${project.archives_base_name}-${project.mod_version}-forge-dev.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("libs"))
+    duplicatesStrategy = DuplicatesStrategy.WARN
+
     from sourceSets.main.output
 
     from {
         configurations.embed.collect { it.isDirectory() ? it : zipTree(it) }
     }
 
-    destinationDirectory.set(layout.buildDirectory.dir("libs"))
-    archiveFileName.set("${project.archives_base_name}-${project.mod_version}-forge-dev.jar")
-
     manifest {
+        def mixinConfigName = project.findProperty('mixin_name') ?: project.mod_id
         attributes([
                 "Specification-Title"     : project.mod_id,
                 "Specification-Vendor"    : project.maven_group,
@@ -117,7 +117,7 @@ tasks.register('devJar', Jar) {
                 "Implementation-Version"  : project.mod_version,
                 "Implementation-Vendor"   : project.maven_group,
                 "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                "MixinConfigs"            : "${project.mod_id}.mixins.json"
+                "MixinConfigs"            : "${mixinConfigName}.json"
         ])
     }
 }
